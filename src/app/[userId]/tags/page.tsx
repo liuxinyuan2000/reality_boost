@@ -5,6 +5,7 @@ import html2canvas from "html2canvas";
 import DeconstructPoster from "./deconstructPoster";
 
 interface Tag {
+  
   text: string;
 }
 
