@@ -1,6 +1,7 @@
 "use client";
-import { useEffect, useState, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useState, useEffect, useRef } from "react";
+import { useParams } from "next/navigation";
+import Link from "next/link";
 import { supabase } from "../supabaseClient";
 import { getCurrentUser, getUserById, saveUserToStorage } from "../utils/userUtils";
 import AuthForm from "../AuthForm";
@@ -9,6 +10,13 @@ interface Note {
   id: string;
   content: string;
   created_at: string;
+}
+
+interface User {
+  id: string;
+  username: string;
+  password?: string;
+  created_at?: string;
 }
 
 // AI聊天模态框组件
@@ -95,12 +103,46 @@ function ChatModal({ open, onClose, messages, onSend, sending, anchorRef }: {
   );
 }
 
+// 新增便签纸条组件
+function NoteSticker({ content, index }: { content: string; index: number }) {
+  // 让每条纸条有不同的旋转角度和轻微错位
+  const angle = (index % 2 === 0 ? 1 : -1) * (6 + (index % 3) * 2 + Math.random() * 2); // -10~+10度
+  const marginX = (index % 2 === 0 ? 1 : -1) * (8 + Math.random() * 8); // -16~+16px
+  return (
+    <div
+      style={{
+        transform: `rotate(${angle}deg)` + ` translateX(${marginX}px)`,
+        background: '#f5f5f0',
+        color: '#222',
+        boxShadow: '0 2px 12px #0002',
+        minWidth: 180,
+        maxWidth: 340,
+        minHeight: 38,
+        padding: '12px 24px',
+        borderRadius: 4,
+        fontSize: 22,
+        fontFamily: 'monospace, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+        fontWeight: 600,
+        marginBottom: 24,
+        marginTop: 8,
+        letterSpacing: 1,
+        border: 'none',
+        outline: 'none',
+        userSelect: 'text',
+        whiteSpace: 'pre-line',
+        transition: 'box-shadow .2s',
+      }}
+    >
+      {content}
+    </div>
+  );
+}
+
 export default function UserPage() {
   const params = useParams();
-  const router = useRouter();
   const userId = params.userId as string;
-  const [user, setUser] = useState<any>(null);
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
   const [isOwnPage, setIsOwnPage] = useState(false);
@@ -109,10 +151,18 @@ export default function UserPage() {
   // 记笔记相关状态
   const [input, setInput] = useState("");
   const [adding, setAdding] = useState(false);
+  const [mode, setMode] = useState<'note' | 'ai'>('note');
   const [showChat, setShowChat] = useState(false);
   const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'ai', content: string }[]>([]);
   const [chatSending, setChatSending] = useState(false);
   const chatBtnRef = useRef<HTMLButtonElement | null>(null);
+  
+  // 共同话题相关状态
+  const [commonTopics, setCommonTopics] = useState<any[]>([]);
+  const [loadingTopics, setLoadingTopics] = useState(false);
+
+  // 定位相关状态
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   // 获取当前登录用户
   useEffect(() => {
@@ -171,6 +221,34 @@ export default function UserPage() {
     fetchNotes();
   }, [userId, user]);
 
+  // 生成共同话题
+  const generateCommonTopics = async () => {
+    if (!currentUser || !user || currentUser.id === user.id) return;
+    
+    setLoadingTopics(true);
+    try {
+      const response = await fetch('/api/generate-common-topics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          currentUserId: currentUser.id, 
+          targetUserId: user.id 
+        }),
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        setCommonTopics(data.topics || []);
+      } else {
+        console.error('生成共同话题失败:', data.error);
+      }
+    } catch (error) {
+      console.error('生成共同话题时发生错误:', error);
+    } finally {
+      setLoadingTopics(false);
+    }
+  };
+
   // 添加笔记
   const handleAdd = async () => {
     if (!input.trim() || !user || !isOwnPage) return;
@@ -188,7 +266,7 @@ export default function UserPage() {
   };
 
   // 处理注册成功
-  const handleAuthSuccess = async (authUser: any) => {
+  const handleAuthSuccess = async (authUser: User) => {
     // 如果注册的用户ID与URL中的ID不匹配，更新用户ID
     if (authUser.id !== userId) {
       try {
@@ -219,6 +297,14 @@ export default function UserPage() {
     }
   };
 
+  // 自动生成共同话题（仅非本机主页）
+  useEffect(() => {
+    if (user && currentUser && !isOwnPage) {
+      generateCommonTopics();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, currentUser, isOwnPage]);
+
   // 加载状态
   if (loading) {
     return (
@@ -241,7 +327,7 @@ export default function UserPage() {
         <div className="max-w-md mx-auto">
           <div className="text-center mb-8">
             <div className="text-4xl mb-4">🎯</div>
-            <h1 className="text-2xl font-bold text-gray-800 mb-2">欢迎使用 Reality Note</h1>
+            <h1 className="text-2xl font-bold text-gray-800 mb-2">Nebula</h1>
             <p className="text-gray-600 mb-4">
               这个专属链接还没有主人，快来注册成为第一个用户吧！
             </p>
@@ -264,12 +350,43 @@ export default function UserPage() {
         <div className="text-center p-8">
           <div className="text-2xl text-gray-600 mb-4">❌</div>
           <div className="text-gray-600 mb-4">用户不存在</div>
-          <a 
+          <Link 
             href="/" 
             className="inline-block bg-[#a5a6f6] hover:bg-[#7c7cf7] text-white font-semibold rounded-lg px-6 py-3 transition-all"
           >
             返回主页
-          </a>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // 显示用户笔记页面
+  if (!isOwnPage) {
+    // 非本机主页：只展示共同话题
+    return (
+      <div className="min-h-screen bg-[#f1f5fb] flex flex-col items-center justify-center py-12">
+        <div className="max-w-xl w-full bg-white rounded-2xl shadow-lg p-8">
+          <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">Nebula为你们生成的共同话题</h2>
+          {loadingTopics ? (
+            <div className="text-center text-gray-500 py-12 text-lg">AI生成中...</div>
+          ) : (
+            <>
+              {commonTopics.length === 0 ? (
+                <div className="text-center text-gray-400 py-12">暂无共同话题</div>
+              ) : (
+                <ul className="space-y-6">
+                  {commonTopics.map((topic, i) => (
+                    <li key={i} className="bg-[#f1f5fb] rounded-xl p-5 shadow-sm border border-[#ececff]">
+                      <div className="text-lg font-semibold text-[#3a2e6c] mb-2">{topic.title}</div>
+                      <div className="text-gray-700 mb-1">{topic.description}</div>
+                      {topic.reasoning && <div className="text-xs text-gray-400 mt-2">AI分析：{topic.reasoning}</div>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
         </div>
       </div>
     );
@@ -284,102 +401,174 @@ export default function UserPage() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-gray-800 mb-2">
-                {user.username} 的笔记
+                {user.username} 的主页
               </h1>
-              <p className="text-gray-600">
-                {isOwnPage ? "这是你的个人笔记页面" : "这是别人的笔记页面"}
-              </p>
             </div>
             <div className="flex items-center gap-4">
-              {currentUser && (
+              {/* {currentUser && (
                 <div className="text-sm text-gray-500">
                   当前用户: {currentUser.username}
                 </div>
-              )}
-              <a 
+              )} */}
+              {/* <Link 
                 href="/" 
                 className="bg-[#a5a6f6] hover:bg-[#7c7cf7] text-white font-semibold rounded-lg px-4 py-2 transition-all"
               >
                 返回主页
-              </a>
+              </Link> */}
+              <Link 
+                href={`/${user.id}/tags`} 
+                className="bg-[#7c7cf7] hover:bg-[#a5a6f6] text-white font-semibold rounded-lg px-4 py-2 transition-all"
+              >
+                状态
+              </Link>
             </div>
           </div>
           
-          {/* 用户专属URL */}
+          {/* 用户专属URL
           <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-            <div className="text-sm text-gray-600 mb-2">专属链接:</div>
-            <div className="flex items-center gap-2">
-              <code className="bg-white px-3 py-2 rounded border text-sm font-mono">
-                {typeof window !== 'undefined' ? `${window.location.origin}/${userId}` : `/${userId}`}
-              </code>
-              <button
-                onClick={() => {
-                  const url = `${window.location.origin}/${userId}`;
-                  navigator.clipboard.writeText(url);
-                  alert('链接已复制到剪贴板！');
-                }}
-                className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-sm transition-all"
-              >
-                复制链接
-              </button>
-            </div>
-          </div>
+          </div> */}
         </div>
 
-        {/* 记笔记区域 - 只有自己的页面才显示 */}
-        {isOwnPage && (
-          <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4">写笔记</h2>
-            <div className="relative w-full">
-              <textarea
-                className="w-full rounded-lg border border-gray-300 p-3 pr-16 resize-none focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white text-lg shadow text-black caret-black placeholder-black transition-all"
-                rows={3}
-                placeholder="写下你的想法..."
-                value={input}
-                onChange={e => setInput(e.target.value)}
-              />
-              {/* 悬浮添加按钮 */}
-              <button
-                className={`absolute bottom-3 right-4 w-12 h-12 rounded-full flex items-center justify-center shadow-lg border-2 transition-all duration-150
-                  ${input.trim() ? "bg-[#a5a6f6] border-[#7c7cf7] hover:bg-[#7c7cf7] active:scale-95" : "bg-gray-200 border-gray-300 cursor-not-allowed opacity-60"}`}
-                onClick={() => { handleAdd(); }}
-                aria-label="添加笔记"
-                disabled={!input.trim() || adding}
-              >
-                <svg width="28" height="28" viewBox="0 0 40 40" fill="none">
-                  <rect x="17" y="7" width="6" height="26" rx="2" fill="white"/>
-                  <rect x="7" y="17" width="26" height="6" rx="2" fill="white"/>
-                </svg>
-              </button>
-            </div>
+        {/* Tab切换 */}
+        {/* <div className="flex mb-2 rounded-lg overflow-hidden border border-[#e6e6fa] bg-white shadow-sm max-w-4xl w-full mx-auto">
+          <button
+            className={`flex-1 py-2 text-lg font-semibold transition-all ${mode === 'note' ? 'bg-[#a5a6f6] text-white' : 'bg-white text-[#3a2e6c]'}`}
+            onClick={() => setMode('note')}
+          >
+            写笔记
+          </button>
+          <button
+            className={`flex-1 py-2 text-lg font-semibold transition-all ${mode === 'ai' ? 'bg-[#a5a6f6] text-white' : 'bg-white text-[#3a2e6c]'}`}
+            onClick={() => setMode('ai')}
+          >
+            AI对话
+          </button>
+        </div> */}
+        {/* 输入区 */}
+        <div className="bg-white rounded-xl shadow p-6 mb-8 max-w-4xl w-full mx-auto">
+          {/* Toggle按钮：输入区上方 */}
+          <div className="flex items-center gap-2 mb-4">
+            <button
+              className={`flex items-center gap-1 rounded-full px-6 py-2 text-lg font-semibold transition-all border ${mode==='ai' ? 'bg-[#a5a6f6] text-white border-[#a5a6f6]' : 'bg-gray-100 text-gray-500 border-gray-200'}`}
+              onClick={()=>setMode('ai')}
+            >
+              AI对话
+            </button>
+            <button
+              className={`flex items-center gap-1 rounded-full px-6 py-2 text-lg font-semibold transition-all border ${mode==='note' ? 'bg-[#a5a6f6] text-white border-[#a5a6f6]' : 'bg-gray-100 text-gray-500 border-gray-200'}`}
+              onClick={()=>setMode('note')}
+            >
+              写笔记
+            </button>
+            {/* 定位开关，仅AI对话模式下显示 */}
+            {/* {mode === 'ai' && (
+              <label className="flex items-center ml-6 cursor-pointer select-none" style={{height: 40}}>
+                <input
+                  type="checkbox"
+                  checked={!!userLocation}
+                  onChange={e => {
+                    if (e.target.checked) {
+                      if (!navigator.geolocation) {
+                        alert('当前浏览器不支持定位');
+                        return;
+                      }
+                      navigator.geolocation.getCurrentPosition(
+                        pos => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+                        err => { alert('定位失败: ' + err.message); setUserLocation(null); },
+                        { enableHighAccuracy: true }
+                      );
+                    } else {
+                      setUserLocation(null);
+                    }
+                  }}
+                  className="mr-2 accent-[#a5a6f6] w-5 h-5"
+                  style={{ accentColor: '#a5a6f6' }}
+                />
+                <span className="text-base text-gray-700">定位 {userLocation ? '已开启' : '关闭'}</span>
+              </label>
+            )} */}
           </div>
-        )}
-
-        {/* 笔记列表 */}
-        <div className="grid gap-4 mb-8">
-          {notes.length === 0 ? (
-            <div className="bg-white rounded-lg shadow-sm p-8 text-center">
-              <div className="text-4xl mb-4">📝</div>
-              <div className="text-gray-600 mb-4">
-                {isOwnPage ? "你还没有笔记，开始写第一篇吧！" : "这个用户还没有笔记"}
-              </div>
-            </div>
-          ) : (
-            notes.map((note) => (
-              <div
-                key={note.id}
-                className="bg-white rounded-lg shadow-sm p-6 border border-gray-200"
-              >
-                <div className="text-gray-800 text-lg mb-2">{note.content}</div>
-                <div className="text-sm text-gray-500">
-                  {new Date(note.created_at).toLocaleString('zh-CN')}
+          <textarea
+            className="w-full h-28 rounded-lg border border-[#e6e6fa] p-4 text-lg text-black focus:outline-none focus:ring-2 focus:ring-[#a5a6f6] resize-none mb-4"
+            placeholder={mode === 'note' ? '写下你的想法...' : '向AI提问或对话...'}
+            value={input}
+            onChange={e => setInput(e.target.value)}
+          />
+          <button
+            className="w-32 h-12 rounded-full bg-[#a5a6f6] hover:bg-[#7c7cf7] text-white text-lg font-semibold shadow transition-all float-right"
+            onClick={async () => {
+              if (mode === 'note') {
+                // 原有保存笔记逻辑
+                if (!input.trim()) return;
+                setAdding(true);
+                try {
+                  const { data, error } = await supabase
+                    .from("notes")
+                    .insert([{ user_id: userId, content: input.trim() }]);
+                  if (!error) {
+                    setNotes([{ id: Date.now().toString(), content: input.trim(), created_at: new Date().toISOString() }, ...notes]);
+                    setInput("");
+                  }
+                } finally {
+                  setAdding(false);
+                }
+              } else {
+                // AI对话逻辑
+                if (!input.trim()) return;
+                setChatSending(true);
+                setChatMessages(msgs => [...msgs, { role: 'user', content: input }]);
+                // 新增：将提问内容也作为一条便签加入notes
+                setNotes(prevNotes => [
+                  { id: Date.now().toString() + Math.random(), content: input, created_at: new Date().toISOString() },
+                  ...prevNotes
+                ]);
+                try {
+                  const res = await fetch('/api/ai-chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId, message: input }),
+                  });
+                  const data = await res.json();
+                  setChatMessages(msgs => [...msgs, { role: 'ai', content: data.reply || 'AI无回复' }]);
+                  setInput("");
+                } catch {
+                  setChatMessages(msgs => [...msgs, { role: 'ai', content: 'AI服务异常' }]);
+                }
+                setChatSending(false);
+              }
+            }}
+            disabled={adding || chatSending}
+          >
+            {mode === 'note' ? (adding ? '保存中...' : '记录') : (chatSending ? '发送中...' : '聊天')}
+          </button>
+          <div className="clear-both" />
+          {/* AI对话历史，仅AI模式下显示 */}
+          {mode === 'ai' && (
+            <div className="w-full mt-6 flex flex-col gap-3">
+              {chatMessages.length > 0 && chatMessages[chatMessages.length-1].role === 'ai' && (
+                <div className="text-left">
+                  <span className="inline-block bg-[#f1f5fb] text-[#222] rounded-lg px-4 py-2 font-semibold">
+                    {chatMessages[chatMessages.length-1].content}
+                  </span>
                 </div>
-              </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* 极简无分区便签墙 */}
+        <div className="min-h-[60vh] max-w-4xl w-full flex flex-wrap gap-6 justify-center items-start mb-8">
+          {notes.length === 0 ? (
+            <div className="text-center text-gray-400 w-full">暂无笔记</div>
+          ) : (
+            notes.map((note, i) => (
+              <NoteSticker key={note.id} content={note.content} index={i} />
             ))
           )}
         </div>
 
-        {/* AI聊天按钮 - 只有自己的页面才显示 */}
+        {/* AI聊天按钮 - 只有自己的页面才显示
         {isOwnPage && (
           <div className="text-center">
             <button
@@ -390,7 +579,7 @@ export default function UserPage() {
               chat
             </button>
           </div>
-        )}
+        )} */}
 
         {/* AI聊天模态框 */}
         <ChatModal
@@ -408,7 +597,7 @@ export default function UserPage() {
               });
               const data = await res.json();
               setChatMessages(current => [...current, { role: 'ai', content: data.reply || 'AI 没有返回内容' }]);
-            } catch (e) {
+            } catch {
               setChatMessages(current => [...current, { role: 'ai', content: 'AI 回复失败，请重试' }]);
             }
             setChatSending(false);

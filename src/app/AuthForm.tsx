@@ -3,8 +3,15 @@ import { useState } from "react";
 import { supabase } from "./supabaseClient";
 import { saveUserToStorage } from "./utils/userUtils";
 
+interface User {
+  id: string;
+  username: string;
+  password: string;
+  created_at?: string;
+}
+
 interface AuthFormProps {
-  onAuth: (user: any) => void;
+  onAuth: (user: User) => void;
   customUserId?: string; // 新增：自定义用户ID
 }
 

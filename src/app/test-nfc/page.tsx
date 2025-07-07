@@ -1,9 +1,17 @@
 "use client";
 import { getCurrentUser } from "../utils/userUtils";
 import { useState, useEffect } from "react";
+import Link from "next/link";
+
+interface User {
+  id: string;
+  username: string;
+  password?: string;
+  created_at?: string;
+}
 
 export default function TestNFCPage() {
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   useEffect(() => {
     const user = getCurrentUser();
@@ -16,12 +24,12 @@ export default function TestNFCPage() {
         <div className="text-center p-8">
           <div className="text-2xl text-gray-600 mb-4">🔐</div>
           <div className="text-gray-600 mb-4">请先登录</div>
-          <a 
+          <Link 
             href="/" 
             className="inline-block bg-[#a5a6f6] hover:bg-[#7c7cf7] text-white font-semibold rounded-lg px-6 py-3 transition-all"
           >
             去登录
-          </a>
+          </Link>
         </div>
       </div>
     );
@@ -41,12 +49,12 @@ export default function TestNFCPage() {
             <div className="text-4xl mb-4">📱</div>
             <h3 className="text-xl font-semibold text-green-600 mb-2">自己的NFC链接</h3>
             <p className="text-gray-600 mb-4">点击下面的链接模拟触碰自己的NFC标签</p>
-            <a 
+            <Link 
               href={`/nfc?id=${currentUser.id}`}
               className="inline-block bg-green-500 hover:bg-green-600 text-white font-semibold rounded-lg px-4 py-2 transition-all"
             >
               触碰自己的NFC
-            </a>
+            </Link>
           </div>
 
           {/* 别人的NFC链接 */}
@@ -54,12 +62,12 @@ export default function TestNFCPage() {
             <div className="text-4xl mb-4">🔗</div>
             <h3 className="text-xl font-semibold text-blue-600 mb-2">别人的NFC链接</h3>
             <p className="text-gray-600 mb-4">点击下面的链接模拟触碰别人的NFC标签</p>
-            <a 
+            <Link 
               href="/nfc?id=other_user_id"
               className="inline-block bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg px-4 py-2 transition-all"
             >
               触碰别人的NFC
-            </a>
+            </Link>
           </div>
 
           {/* 自己的专属页面 */}
@@ -67,12 +75,12 @@ export default function TestNFCPage() {
             <div className="text-4xl mb-4">💎</div>
             <h3 className="text-xl font-semibold text-purple-600 mb-2">自己的专属页面</h3>
             <p className="text-gray-600 mb-4">直接访问你的专属笔记页面</p>
-            <a 
+            <Link 
               href={`/${currentUser.id}`}
               className="inline-block bg-purple-500 hover:bg-purple-600 text-white font-semibold rounded-lg px-4 py-2 transition-all"
             >
               访问专属页面
-            </a>
+            </Link>
           </div>
 
           {/* 无效链接 */}
@@ -80,12 +88,12 @@ export default function TestNFCPage() {
             <div className="text-4xl mb-4">❌</div>
             <h3 className="text-xl font-semibold text-red-600 mb-2">无效链接</h3>
             <p className="text-gray-600 mb-4">点击下面的链接测试无效NFC链接</p>
-            <a 
+            <Link 
               href="/nfc"
               className="inline-block bg-red-500 hover:bg-red-600 text-white font-semibold rounded-lg px-4 py-2 transition-all"
             >
               无效NFC链接
-            </a>
+            </Link>
           </div>
 
           {/* 返回主页 */}
@@ -93,12 +101,12 @@ export default function TestNFCPage() {
             <div className="text-4xl mb-4">🏠</div>
             <h3 className="text-xl font-semibold text-gray-600 mb-2">返回主页</h3>
             <p className="text-gray-600 mb-4">返回应用主页</p>
-            <a 
+            <Link 
               href="/"
               className="inline-block bg-[#a5a6f6] hover:bg-[#7c7cf7] text-white font-semibold rounded-lg px-4 py-2 transition-all"
             >
               返回主页
-            </a>
+            </Link>
           </div>
 
           {/* 未登录测试 */}
@@ -106,12 +114,12 @@ export default function TestNFCPage() {
             <div className="text-4xl mb-4">🔐</div>
             <h3 className="text-xl font-semibold text-orange-600 mb-2">未登录测试</h3>
             <p className="text-gray-600 mb-4">先登出，然后测试NFC链接</p>
-            <a 
+            <Link 
               href="/"
               className="inline-block bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-lg px-4 py-2 transition-all"
             >
               去登出测试
-            </a>
+            </Link>
           </div>
         </div>
 

@@ -1,7 +1,14 @@
 import { supabase } from "../supabaseClient";
 
+interface User {
+  id: string;
+  username: string;
+  password?: string;
+  created_at?: string;
+}
+
 // 获取当前登录用户
-export const getCurrentUser = () => {
+export const getCurrentUser = (): User | null => {
   try {
     const userData = localStorage.getItem('currentUser');
     if (userData) {
@@ -15,7 +22,7 @@ export const getCurrentUser = () => {
 };
 
 // 保存用户信息到localStorage
-export const saveUserToStorage = (user: any) => {
+export const saveUserToStorage = (user: User) => {
   localStorage.setItem('currentUser', JSON.stringify(user));
 };
 
@@ -25,7 +32,7 @@ export const clearUserFromStorage = () => {
 };
 
 // 通过用户ID获取用户信息
-export const getUserById = async (userId: string) => {
+export const getUserById = async (userId: string): Promise<User | null> => {
   try {
     const { data, error } = await supabase
       .from("users")
