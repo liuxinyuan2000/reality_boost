@@ -499,17 +499,23 @@ export default function UserPage() {
             className="w-32 h-12 rounded-full bg-[#a5a6f6] hover:bg-[#7c7cf7] text-white text-lg font-semibold shadow transition-all float-right"
             onClick={async () => {
               if (mode === 'note') {
-                // 原有保存笔记逻辑
+                // 保存笔记到Supabase
                 if (!input.trim()) return;
                 setAdding(true);
                 try {
                   const { data, error } = await supabase
                     .from("notes")
-                    .insert([{ user_id: userId, content: input.trim() }]);
-                  if (!error) {
-                    setNotes([{ id: Date.now().toString(), content: input.trim(), created_at: new Date().toISOString() }, ...notes]);
+                    .insert([{ user_id: userId, content: input.trim() }])
+                    .select()
+                    .single();
+                  if (!error && data) {
+                    setNotes([data, ...notes]);
                     setInput("");
+                  } else {
+                    console.error('保存笔记失败:', error);
                   }
+                } catch (error) {
+                  console.error('保存笔记异常:', error);
                 } finally {
                   setAdding(false);
                 }
@@ -518,11 +524,25 @@ export default function UserPage() {
                 if (!input.trim()) return;
                 setChatSending(true);
                 setChatMessages(msgs => [...msgs, { role: 'user', content: input }]);
-                // 新增：将提问内容也作为一条便签加入notes
-                setNotes(prevNotes => [
-                  { id: Date.now().toString() + Math.random(), content: input, created_at: new Date().toISOString() },
-                  ...prevNotes
-                ]);
+                
+                // 保存AI对话内容到Supabase
+                try {
+                  const { data: noteData, error: noteError } = await supabase
+                    .from("notes")
+                    .insert([{ user_id: userId, content: input.trim() }])
+                    .select()
+                    .single();
+                  
+                  if (!noteError && noteData) {
+                    // 添加到本地状态
+                    setNotes([noteData, ...notes]);
+                  } else {
+                    console.error('保存AI对话到数据库失败:', noteError);
+                  }
+                } catch (error) {
+                  console.error('保存AI对话失败:', error);
+                }
+                
                 try {
                   const res = await fetch('/api/ai-chat', {
                     method: 'POST',

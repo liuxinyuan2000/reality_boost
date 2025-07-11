@@ -6,39 +6,28 @@ interface Note {
   created_at: string;
 }
 
-// 智能选择相关笔记（增加数量并改进选择逻辑）
+// 智能选择相关笔记（简化版：直接取最近10条）
 async function getRelevantNotes(userId: string, message: string) {
   const { data: notes, error } = await supabase
     .from('notes')
     .select('content, created_at')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
-    .limit(10); // 增加到10条
+    .limit(10); // 取最近10条
+
+  console.log('[AI-CHAT] getRelevantNotes userId:', userId, 'message:', message);
+  if (error) {
+    console.error('[AI-CHAT] 查询notes出错:', error);
+  }
+  console.log('[AI-CHAT] 查到的notes:', notes);
 
   if (error || !notes) {
     return '';
   }
 
-  // 简单的关键词匹配，选择更相关的笔记
-  const relevantNotes = notes.filter(note => {
-    const noteLower = note.content.toLowerCase();
-    const messageLower = message.toLowerCase();
-    
-    // 检查是否有共同的关键词
-    const noteWords = noteLower.split(/\s+/);
-    const messageWords = messageLower.split(/\s+/);
-    
-    return messageWords.some(word => 
-      word.length > 2 && noteWords.some((noteWord: string) => 
-        noteWord.includes(word) || word.includes(noteWord)
-      )
-    );
-  });
-
-  // 如果找到相关笔记，优先使用；否则使用最近的笔记
-  const notesToUse = relevantNotes.length > 0 ? relevantNotes : notes.slice(0, 5);
-  
-  return notesToUse.map((n: Note) => n.content).join('\n');
+  // 直接返回最近10条笔记，不做相关性匹配
+  console.log('[AI-CHAT] 直接使用最近10条notes:', notes);
+  return notes.map((n: Note) => n.content).join('\n');
 }
 
 // 快速本地响应（作为备选）
@@ -127,14 +116,8 @@ export async function POST(req: NextRequest) {
     const notesText = await getRelevantNotes(userId, message);
 
     // 改进的 prompt，更明确地指导 AI 基于笔记回答
-    const prompt = `基于用户的历史笔记内容，回答用户的问题。
-
-用户的历史笔记：
-${notesText || '暂无历史笔记'}
-
-用户当前问题：${message}
-
-请基于用户的历史笔记内容来回答，体现对用户过去记录的理解。回答要自然、有针对性，控制在150字以内。`;
+    const prompt = `基于用户的历史笔记内容，回答用户的问题。\n\n用户的历史笔记：\n${notesText || '暂无历史笔记'}\n\n用户当前问题：${message}\n\n请基于用户的历史笔记内容来回答，体现对用户过去记录的理解。回答要自然、有针对性，控制在150字以内。`;
+    console.log('[AI-CHAT] 最终发给AI的prompt:', prompt);
 
     const startTime = Date.now();
     let reply: string;
