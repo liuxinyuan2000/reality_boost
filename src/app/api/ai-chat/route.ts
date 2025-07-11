@@ -3,23 +3,95 @@ import { supabase } from '../../supabaseClient';
 
 interface Note {
   content: string;
+  created_at: string;
 }
 
-// 新增：查找周边地标/设施
-async function getNearbyPlaces(lat: number, lon: number) {
-  // Nominatim: 查找500米内10个地标
-  const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`;
-  const res = await fetch(url, { headers: { 'User-Agent': 'RealityNote/1.0' } });
-  const data = await res.json();
-  let address = data.display_name || '';
+// 智能选择相关笔记（只取最近5条，大幅减少）
+async function getRelevantNotes(userId: string, message: string) {
+  const { data: notes, error } = await supabase
+    .from('notes')
+    .select('content, created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(5); // 只取最近5条，大幅减少
 
-  // 查找周边POI
-  const nearbyUrl = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&extratags=1&limit=8&bounded=1&viewbox=${lon-0.005},${lat+0.005},${lon+0.005},${lat-0.005}`;
-  const poiRes = await fetch(nearbyUrl, { headers: { 'User-Agent': 'RealityNote/1.0' } });
-  const poiData = await poiRes.json();
-  // 只取有name的POI
-  const pois = poiData.filter((p: any) => p.display_name).map((p: any) => p.display_name.split(',')[0]).slice(0, 8);
-  return { address, pois };
+  if (error || !notes) {
+    return '';
+  }
+
+  return notes.map((n: Note) => n.content).join('\n');
+}
+
+// 快速本地响应（作为备选）
+function getQuickResponse(message: string) {
+  const quickResponses = {
+    '你好': '你好！有什么可以帮你的吗？',
+    '天气': '今天天气不错，适合出门走走。',
+    '工作': '工作要劳逸结合，注意休息。',
+    '学习': '学习是一个持续的过程，加油！',
+    '吃饭': '记得按时吃饭，保持健康。',
+    '睡觉': '早点休息，明天会更好。'
+  };
+
+  for (const [key, response] of Object.entries(quickResponses)) {
+    if (message.includes(key)) {
+      return response;
+    }
+  }
+  
+  return '我理解你的想法，继续加油！';
+}
+
+// 调用Kimi API (Moonshot)
+async function callKimiAPI(prompt: string) {
+  const kimiKey = process.env.KIMI_API_KEY;
+  if (!kimiKey) {
+    console.error('缺少 KIMI_API_KEY 环境变量');
+    throw new Error('缺少 Kimi API Key');
+  }
+
+  console.log('🔑 使用 Kimi API Key:', kimiKey.substring(0, 10) + '...');
+  console.log('📝 Prompt:', prompt.substring(0, 100) + '...');
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000); // 8秒超时
+
+  try {
+    const response = await fetch('https://api.moonshot.cn/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${kimiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'moonshot-v1-8k',
+        messages: [
+          { role: 'system', content: '你是一个简洁的AI助手。请用简短的话回答用户问题。' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.5,
+        max_tokens: 150
+      }),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    console.log('📊 Kimi API 响应状态:', response.status);
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error('❌ Kimi API 错误:', response.status, errorData);
+      throw new Error(`Kimi API 调用失败: ${response.status} - ${errorData}`);
+    }
+
+    const data = await response.json();
+    console.log('✅ Kimi API 成功响应');
+    return data.choices?.[0]?.message?.content || 'Kimi 没有返回内容';
+  } catch (error) {
+    console.error('❌ Kimi API 调用异常:', error instanceof Error ? error.message : '未知错误');
+    throw error;
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -28,65 +100,42 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: '缺少 userId 或 message' }, { status: 400 });
   }
 
-  // 拉取历史 note
-  const { data: notes, error } = await supabase
-    .from('notes')
-    .select('content')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: true });
+  try {
+    // 只获取笔记，移除地理位置API调用
+    const notesText = await getRelevantNotes(userId, message);
 
-  if (error) {
-    return NextResponse.json({ error: '获取笔记失败' }, { status: 500 });
-  }
+    // 简化 prompt，移除地理位置信息
+    const prompt = `用户笔记：${notesText}\n\n用户问题：${message}\n\n请简洁回答，控制在100字以内。`;
 
-  const notesText = notes?.map((n: Note) => n.content).join('\n') || '';
+    const startTime = Date.now();
+    let reply: string;
+    let apiUsed: string = 'Kimi';
 
-  // 新增：拼接地理context
-  let geoContext = '';
-  if (location && location.lat && location.lng) {
     try {
-      const { address, pois } = await getNearbyPlaces(location.lat, location.lng);
-      geoContext = `\n你现在所在位置：${address || `${location.lat},${location.lng}`}`;
-      if (pois && pois.length > 0) {
-        geoContext += `\n你附近有这些地标/设施：${pois.join('、')}。`;
-      }
-      geoContext += '\n请结合你的位置和周边环境，给出更有现实感的建议。';
-    } catch (e) {
-      geoContext = `\n（定位信息获取失败，但你的位置为：${location.lat},${location.lng}）`;
+      reply = await callKimiAPI(prompt);
+    } catch (error) {
+      console.error('Kimi API 错误:', error);
+      reply = getQuickResponse(message);
+      apiUsed = 'Local Fallback';
     }
+
+    const responseTime = Date.now() - startTime;
+
+    return NextResponse.json({ 
+      reply,
+      apiUsed,
+      responseTime,
+      fallback: apiUsed === 'Local Fallback'
+    });
+
+  } catch (error) {
+    console.error('AI聊天错误:', error);
+    const quickReply = getQuickResponse(message);
+    return NextResponse.json({ 
+      reply: quickReply,
+      apiUsed: 'Local Fallback',
+      responseTime: 0,
+      fallback: true
+    });
   }
-
-  // 构造 prompt
-  const prompt = `以下是我的所有笔记：\n${notesText}\n${geoContext}\n现在我想和你聊聊：${message}\n请结合我的所有笔记和现实环境来回答。`;
-
-  // 调用 OpenAI API
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json({ error: '缺少 OpenAI API Key' }, { status: 500 });
-  }
-
-  const openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: 'gpt-3.5-turbo',
-      messages: [
-        { role: 'system', content: '你是一个善于结合用户历史笔记和现实地理环境进行对话的AI助手。' },
-        { role: 'user', content: prompt },
-      ],
-      max_tokens: 500,
-    }),
-  });
-
-  const openaiData = await openaiRes.json();
-  if (!openaiRes.ok) {
-    console.error('OpenAI API error:', openaiData);
-    return NextResponse.json({ error: 'OpenAI API 调用失败', detail: openaiData }, { status: 500 });
-  }
-
-  const reply = openaiData.choices?.[0]?.message?.content || 'AI 没有返回内容';
-  return NextResponse.json({ reply });
 } 
