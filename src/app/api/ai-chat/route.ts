@@ -6,20 +6,39 @@ interface Note {
   created_at: string;
 }
 
-// 智能选择相关笔记（只取最近5条，大幅减少）
+// 智能选择相关笔记（增加数量并改进选择逻辑）
 async function getRelevantNotes(userId: string, message: string) {
   const { data: notes, error } = await supabase
     .from('notes')
     .select('content, created_at')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
-    .limit(5); // 只取最近5条，大幅减少
+    .limit(10); // 增加到10条
 
   if (error || !notes) {
     return '';
   }
 
-  return notes.map((n: Note) => n.content).join('\n');
+  // 简单的关键词匹配，选择更相关的笔记
+  const relevantNotes = notes.filter(note => {
+    const noteLower = note.content.toLowerCase();
+    const messageLower = message.toLowerCase();
+    
+    // 检查是否有共同的关键词
+    const noteWords = noteLower.split(/\s+/);
+    const messageWords = messageLower.split(/\s+/);
+    
+    return messageWords.some(word => 
+      word.length > 2 && noteWords.some((noteWord: string) => 
+        noteWord.includes(word) || word.includes(noteWord)
+      )
+    );
+  });
+
+  // 如果找到相关笔记，优先使用；否则使用最近的笔记
+  const notesToUse = relevantNotes.length > 0 ? relevantNotes : notes.slice(0, 5);
+  
+  return notesToUse.map((n: Note) => n.content).join('\n');
 }
 
 // 快速本地响应（作为备选）
@@ -66,11 +85,14 @@ async function callKimiAPI(prompt: string) {
       body: JSON.stringify({
         model: 'moonshot-v1-8k',
         messages: [
-          { role: 'system', content: '你是一个简洁的AI助手。请用简短的话回答用户问题。' },
+          { 
+            role: 'system', 
+            content: '你是一个基于用户历史笔记的AI助手。请仔细分析用户的笔记内容，结合笔记中的信息来回答用户的问题。回答要体现对用户历史记录的理解，但不要直接引用笔记内容。' 
+          },
           { role: 'user', content: prompt }
         ],
-        temperature: 0.5,
-        max_tokens: 150
+        temperature: 0.7,
+        max_tokens: 200
       }),
       signal: controller.signal
     });
@@ -101,11 +123,18 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // 只获取笔记，移除地理位置API调用
+    // 获取相关笔记
     const notesText = await getRelevantNotes(userId, message);
 
-    // 简化 prompt，移除地理位置信息
-    const prompt = `用户笔记：${notesText}\n\n用户问题：${message}\n\n请简洁回答，控制在100字以内。`;
+    // 改进的 prompt，更明确地指导 AI 基于笔记回答
+    const prompt = `基于用户的历史笔记内容，回答用户的问题。
+
+用户的历史笔记：
+${notesText || '暂无历史笔记'}
+
+用户当前问题：${message}
+
+请基于用户的历史笔记内容来回答，体现对用户过去记录的理解。回答要自然、有针对性，控制在150字以内。`;
 
     const startTime = Date.now();
     let reply: string;
@@ -125,7 +154,8 @@ export async function POST(req: NextRequest) {
       reply,
       apiUsed,
       responseTime,
-      fallback: apiUsed === 'Local Fallback'
+      fallback: apiUsed === 'Local Fallback',
+      notesCount: notesText ? notesText.split('\n').length : 0
     });
 
   } catch (error) {
