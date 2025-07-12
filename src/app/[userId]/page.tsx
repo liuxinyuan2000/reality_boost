@@ -392,7 +392,7 @@ export default function UserPage() {
   // 显示用户笔记页面
   if (!isOwnPage) {
     // 非本机主页：只展示共同话题
-    const emojiList = ['🧩', '🌍', '🤖', '💡', '🎮', '🎤', '🍔', '🏞️', '🎨', '📚'];
+    const emojiList = [ '🌍', '🎮', '🎤', '🍔', '🏞️', '🎨'];
     return (
       <div className="min-h-screen bg-[#f1f5fb] flex flex-col items-center justify-center py-12">
         <div className="max-w-xl w-full bg-white rounded-3xl shadow-lg p-10">
@@ -424,9 +424,9 @@ export default function UserPage() {
                   ))}
                 </ul>
               )}
-              <div className="text-center text-purple-600 mt-10 text-lg font-semibold animate-bounce">
+              {/* <div className="text-center text-purple-600 mt-10 text-lg font-semibold animate-bounce">
                 别害羞，快和对方聊聊这些话题吧！🎉
-              </div>
+              </div> */}
             </>
           )}
         </div>

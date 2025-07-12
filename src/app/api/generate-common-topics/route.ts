@@ -48,13 +48,13 @@ export async function POST(req: NextRequest) {
         .select('content')
         .eq('user_id', currentUserId)
         .order('created_at', { ascending: false })
-        .limit(10),
+        .limit(15),
       supabase
         .from('notes')
         .select('content')
         .eq('user_id', targetUserId)
         .order('created_at', { ascending: false })
-        .limit(10),
+        .limit(15),
       supabase
         .from('users')
         .select('username')
@@ -68,24 +68,17 @@ export async function POST(req: NextRequest) {
       fetchNearbyPOIs(location)
     ]);
 
-    if (currentUserNotes.error) {
-      console.error('[COMMON-TOPICS] 获取当前用户笔记失败:', currentUserNotes.error);
-      return NextResponse.json({ 
-        success: false, 
-        error: '获取当前用户笔记失败' 
-      }, { status: 500 });
-    }
+    // 检查用户是否存在
+    const currentUserExists = currentUser?.data && !currentUser.error;
+    const targetUserExists = targetUser?.data && !targetUser.error;
+    
+    // 检查用户是否有笔记
+    const currentUserHasNotes = currentUserNotes?.data && currentUserNotes.data.length > 0 && !currentUserNotes.error;
+    const targetUserHasNotes = targetUserNotes?.data && targetUserNotes.data.length > 0 && !targetUserNotes.error;
 
-    if (targetUserNotes.error) {
-      console.error('[COMMON-TOPICS] 获取目标用户笔记失败:', targetUserNotes.error);
-      return NextResponse.json({ 
-        success: false, 
-        error: '获取目标用户笔记失败' 
-      }, { status: 500 });
-    }
-
-    const currentNotesText = currentUserNotes.data?.map((n: any) => n.content).join('\n') || '';
-    const targetNotesText = targetUserNotes.data?.map((n: any) => n.content).join('\n') || '';
+    const currentNotesText = currentUserHasNotes ? currentUserNotes.data?.map((n: any) => n.content).join('\n') || '' : '';
+    const targetNotesText = targetUserHasNotes ? targetUserNotes.data?.map((n: any) => n.content).join('\n') || '' : '';
+    
     let localInfo = '';
     if (Array.isArray(nearbyPOIs) && nearbyPOIs.length > 0) {
       localInfo = '你们附近有这些热门地标/活动（含类型和地址）：\n' + nearbyPOIs.map((p, idx) => `${idx+1}. ${p.name}（${p.type}，${p.address}）`).join('\\n');
@@ -93,17 +86,97 @@ export async function POST(req: NextRequest) {
       console.log('[DEBUG] localInfo for prompt:', localInfo);
     }
 
-    // 构造AI提示
-    const prompt = `请像一个很懂人、很会玩的朋友，基于以下两位用户的历史笔记内容，深度分析他们的兴趣、性格、表达风格和潜在联系，发现他们自己都没意识到的有趣细节、反差、习惯或隐藏的共同点。然后结合他们当前的地理位置和附近真实地标/活动，给出5个新奇、好玩、个性化的本地生活建议。每个建议包含：
+    // 根据用户状态构造不同的AI提示
+    let prompt = '';
+    let systemPrompt = '';
+
+    if (!currentUserExists || !targetUserExists) {
+      // 一方或双方未注册
+      const existingUser = currentUserExists ? currentUser : targetUser;
+      const existingUserNotes = currentUserExists ? currentNotesText : targetNotesText;
+      const existingUsername = existingUser?.data?.username || '用户';
+      
+      systemPrompt = '你是一个善于分析用户兴趣和推荐个性化话题、互动和体验的AI助手。请基于用户的笔记内容，为其推荐适合的话题、互动和体验。';
+      
+      prompt = `请像一个很懂人、很会玩的朋友，基于以下用户的历史笔记内容，深度分析他们的兴趣、性格、表达风格，然后给出5个新奇、好玩、个性化的建议。每个建议包含：
 - title：一句有趣的标题
-- insight：你发现的有趣细节/联系/反差（比如“你们都喜欢在笔记里自问自答，其实都挺会自娱自乐”）
-- suggestion：结合本地生活的好玩建议/任务/体验（如“你们可以一起去xxx公园玩角色扮演，体验自娱自乐的乐趣”）
-- source：一句话说明推荐原因（如“你们都在笔记中表现出xxx，但可能没意识到”）
+- insight：你发现的有趣细节/性格特点/兴趣倾向（比如"从你的笔记里看出你很喜欢观察生活中的小细节"）
+- suggestion：好玩的话题/互动/体验建议（可以是聊天话题、游戏互动、本地体验等）
+- source：一句话说明推荐原因（如"你在笔记中表现出xxx，这个很适合你"）
 
 要求：
-- 洞察要有创意、有脑洞、有点“懂你”的感觉，让人觉得“被看见”
-- 建议要结合附近真实地标/活动，具体到地标/店名
-- 建议要新奇、好玩、能让两个人一起体验或比拼
+- 建议要均衡分布：包含有趣的话题讨论、好玩的互动游戏、新奇的体验活动
+- 话题类：可以是深度聊天、趣味问答、故事分享等
+- 互动类：可以是小游戏、角色扮演、创意挑战等  
+- 体验类：可以是本地探索、新技能尝试、创意活动等
+- 洞察要有创意、有脑洞、有点"懂你"的感觉，让人觉得"被看见"
+- 不要输出任何代码块、注释或多余内容，只返回如下JSON格式：
+
+{
+  "topics": [
+    {
+      "title": "有趣标题",
+      "insight": "有趣的洞察/性格特点/兴趣倾向",
+      "suggestion": "好玩的话题/互动/体验建议",
+      "source": "推荐原因说明"
+    }
+  ]
+}
+
+${localInfo}
+
+${existingUsername}的笔记：
+${existingUserNotes || '暂无笔记'}`;
+
+    } else if (!currentUserHasNotes && !targetUserHasNotes) {
+      // 双方都没有笔记
+      systemPrompt = '你是一个善于推荐话题、互动和体验的AI助手。请基于用户的地理位置，推荐适合的话题、互动和体验。';
+      
+      prompt = `请像一个很懂人、很会玩的朋友，基于用户当前的地理位置和附近真实地标/活动，给出5个新奇、好玩、适合新用户的建议。每个建议包含：
+- title：一句有趣的标题
+- insight：为什么推荐这个建议（比如"这是一个很适合新用户探索的话题"）
+- suggestion：好玩的话题/互动/体验建议（可以是聊天话题、游戏互动、本地体验等）
+- source：一句话说明推荐原因（如"这里很适合初次体验"）
+
+要求：
+- 建议要均衡分布：包含有趣的话题讨论、好玩的互动游戏、新奇的体验活动
+- 话题类：可以是深度聊天、趣味问答、故事分享等
+- 互动类：可以是小游戏、角色扮演、创意挑战等  
+- 体验类：可以是本地探索、新技能尝试、创意活动等
+- 不要输出任何代码块、注释或多余内容，只返回如下JSON格式：
+
+{
+  "topics": [
+    {
+      "title": "有趣标题",
+      "insight": "为什么推荐这个建议",
+      "suggestion": "好玩的话题/互动/体验建议",
+      "source": "推荐原因说明"
+    }
+  ]
+}
+
+${localInfo}
+
+用户信息：
+${currentUser?.data?.username || '用户1'} 和 ${targetUser?.data?.username || '用户2'} 都是新用户，还没有笔记记录。`;
+
+    } else {
+      // 正常情况：双方都有笔记或至少一方有笔记
+      systemPrompt = '你是一个善于分析用户兴趣和生成共同话题、互动和体验的AI助手。请基于用户的笔记内容，找出可能的共同话题、互动和体验。';
+      
+      prompt = `请像一个很懂人、很会玩的朋友，基于以下两位用户的历史笔记内容，深度分析他们的兴趣、性格、表达风格和潜在联系，发现他们自己都没意识到的有趣细节、反差、习惯或隐藏的共同点。然后给出5个新奇、好玩、个性化的建议。每个建议包含：
+- title：一句有趣的标题
+- insight：你发现的有趣细节/联系/反差（比如"你们都喜欢在笔记里自问自答，其实都挺会自娱自乐"）
+- suggestion：好玩的话题/互动/体验建议（可以是聊天话题、游戏互动、本地体验等）
+- source：一句话说明推荐原因（如"你们都在笔记中表现出xxx，但可能没意识到"）
+
+要求：
+- 建议要均衡分布：包含有趣的话题讨论、好玩的互动游戏、新奇的体验活动
+- 话题类：可以是深度聊天、趣味问答、故事分享等
+- 互动类：可以是小游戏、角色扮演、创意挑战等  
+- 体验类：可以是本地探索、新技能尝试、创意活动等
+- 洞察要有创意、有脑洞、有点"懂你"的感觉，让人觉得"被看见"
 - 不要输出任何代码块、注释或多余内容，只返回如下JSON格式：
 
 {
@@ -111,7 +184,7 @@ export async function POST(req: NextRequest) {
     {
       "title": "有趣标题",
       "insight": "有趣的洞察/联系/反差",
-      "suggestion": "结合本地生活的好玩建议/任务/体验",
+      "suggestion": "好玩的话题/互动/体验建议",
       "source": "推荐原因说明"
     }
   ]
@@ -124,6 +197,7 @@ ${currentNotesText || '暂无笔记'}
 
 ${targetUser?.data?.username || '用户2'}的笔记：
 ${targetNotesText || '暂无笔记'}`;
+    }
 
     // 调用Kimi API（带超时）
     const apiKey = process.env.KIMI_API_KEY;
@@ -139,7 +213,7 @@ ${targetNotesText || '暂无笔记'}`;
     console.log('[COMMON-TOPICS] prompt:', prompt.substring(0, 200));
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000); // 20秒超时
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30秒超时
 
     try {
       const response = await fetch('https://api.moonshot.cn/v1/chat/completions', {
@@ -149,15 +223,15 @@ ${targetNotesText || '暂无笔记'}`;
           'Authorization': `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          model: 'moonshot-v1-8k',
+          model: 'moonshot-v1-32k',
           messages: [
             { 
               role: 'system', 
-              content: '你是一个善于分析用户兴趣和生成共同话题的AI助手。请基于用户的笔记内容，找出可能的共同话题。' 
+              content: systemPrompt
             },
             { role: 'user', content: prompt },
           ],
-          max_tokens: 800,
+          max_tokens: 1500,
           temperature: 0.7,
         }),
         signal: controller.signal
@@ -220,6 +294,57 @@ ${targetNotesText || '暂无笔记'}`;
             topics = JSON.parse(match[1]);
           } catch (e2) {
             console.error('[COMMON-TOPICS] 正则提取topics再次解析失败:', e2, match[1]);
+            // 根据情况提供不同的默认话题
+            if (!currentUserExists || !targetUserExists) {
+              topics = [
+                {
+                  title: "探索新地方",
+                  insight: "你正在开始使用Reality Note记录生活，这是一个很好的习惯。",
+                  suggestion: "可以先去附近的公园或咖啡店，记录下今天的感受和发现。",
+                  source: "新用户很适合从简单的记录开始"
+                }
+              ];
+            } else if (!currentUserHasNotes && !targetUserHasNotes) {
+              topics = [
+                {
+                  title: "一起探索",
+                  insight: "你们都是新用户，可以一起开始记录生活的旅程。",
+                  suggestion: "可以一起去附近的地方探索，互相分享各自的发现和感受。",
+                  source: "新用户很适合结伴体验"
+                }
+              ];
+            } else {
+              topics = [
+                {
+                  title: "笔记分享",
+                  insight: "你们都在用Reality Note记录生活，说明都很重视自我表达。",
+                  suggestion: "可以互相分享一条最近的笔记，聊聊各自的记录习惯。",
+                  source: "你们都在用同一个笔记应用"
+                }
+              ];
+            }
+          }
+        } else {
+          // 根据情况提供不同的默认话题
+          if (!currentUserExists || !targetUserExists) {
+            topics = [
+              {
+                title: "探索新地方",
+                insight: "你正在开始使用Reality Note记录生活，这是一个很好的习惯。",
+                suggestion: "可以先去附近的公园或咖啡店，记录下今天的感受和发现。",
+                source: "新用户很适合从简单的记录开始"
+              }
+            ];
+          } else if (!currentUserHasNotes && !targetUserHasNotes) {
+            topics = [
+              {
+                title: "一起探索",
+                insight: "你们都是新用户，可以一起开始记录生活的旅程。",
+                suggestion: "可以一起去附近的地方探索，互相分享各自的发现和感受。",
+                source: "新用户很适合结伴体验"
+              }
+            ];
+          } else {
             topics = [
               {
                 title: "笔记分享",
@@ -229,15 +354,6 @@ ${targetNotesText || '暂无笔记'}`;
               }
             ];
           }
-        } else {
-          topics = [
-            {
-              title: "笔记分享",
-              insight: "你们都在用Reality Note记录生活，说明都很重视自我表达。",
-              suggestion: "可以互相分享一条最近的笔记，聊聊各自的记录习惯。",
-              source: "你们都在用同一个笔记应用"
-            }
-          ];
         }
       }
 
@@ -245,7 +361,11 @@ ${targetNotesText || '暂无笔记'}`;
         success: true, 
         topics,
         currentUser: currentUser?.data?.username,
-        targetUser: targetUser?.data?.username
+        targetUser: targetUser?.data?.username,
+        currentUserExists,
+        targetUserExists,
+        currentUserHasNotes,
+        targetUserHasNotes
       });
 
     } catch (error) {

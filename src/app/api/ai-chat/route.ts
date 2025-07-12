@@ -13,7 +13,7 @@ async function getRelevantNotes(userId: string, message: string) {
     .select('content, created_at')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
-    .limit(10); // 取最近10条
+    .limit(20); // 取最近20条
 
   console.log('[AI-CHAT] getRelevantNotes userId:', userId, 'message:', message);
   if (error) {
@@ -62,7 +62,7 @@ async function callKimiAPI(prompt: string) {
   console.log('📝 Prompt:', prompt.substring(0, 100) + '...');
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 8000); // 8秒超时
+  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15秒超时
 
   try {
     const response = await fetch('https://api.moonshot.cn/v1/chat/completions', {
@@ -72,16 +72,16 @@ async function callKimiAPI(prompt: string) {
         'Authorization': `Bearer ${kimiKey}`,
       },
       body: JSON.stringify({
-        model: 'moonshot-v1-8k',
+        model: 'moonshot-v1-32k',
         messages: [
           { 
             role: 'system', 
-            content: '你是一个基于用户历史笔记的AI助手。请仔细分析用户的笔记内容，结合笔记中的信息来回答用户的问题。回答要体现对用户历史记录的理解，但不要直接引用笔记内容。' 
+            content: '你是一个基于用户历史笔记的AI助手。请仔细分析用户的笔记内容，结合互联网的信息和笔记中的信息来回答用户的问题。回答要根据问题来判断需不需要体现对用户历史记录的理解，不要直接引用笔记内容。' 
           },
           { role: 'user', content: prompt }
         ],
         temperature: 0.7,
-        max_tokens: 200
+        max_tokens: 500
       }),
       signal: controller.signal
     });
@@ -100,6 +100,10 @@ async function callKimiAPI(prompt: string) {
     console.log('✅ Kimi API 成功响应');
     return data.choices?.[0]?.message?.content || 'Kimi 没有返回内容';
   } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('⏰ Kimi API 调用超时');
+      throw new Error('AI服务响应超时，请稍后重试');
+    }
     console.error('❌ Kimi API 调用异常:', error instanceof Error ? error.message : '未知错误');
     throw error;
   }

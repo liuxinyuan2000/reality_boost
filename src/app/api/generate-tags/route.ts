@@ -10,13 +10,13 @@ export async function POST(req: NextRequest) {
   try {
     console.log('🏷️ 开始生成标签，用户ID:', userId);
 
-    // 获取用户最近的10条笔记
+    // 获取用户最近的15条笔记
     const { data: notes, error } = await supabase
       .from('notes')
       .select('content')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
-      .limit(10);
+      .limit(15);
 
     if (error) {
       console.error('❌ 获取笔记失败:', error);
@@ -65,7 +65,7 @@ ${notesText}
     console.log('📝 Prompt 长度:', prompt.length);
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 增加到15秒超时
+    const timeoutId = setTimeout(() => controller.abort(), 20000); // 20秒超时
 
     try {
       const response = await fetch('https://api.moonshot.cn/v1/chat/completions', {
@@ -75,12 +75,12 @@ ${notesText}
           'Authorization': `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          model: 'moonshot-v1-8k',
+          model: 'moonshot-v1-32k',
           messages: [
             { role: 'system', content: '你是一个善于用标签总结用户状态的AI助手。请只返回JSON数组格式的标签。' },
             { role: 'user', content: prompt },
           ],
-          max_tokens: 300,
+          max_tokens: 500,
           temperature: 0.7,
         }),
         signal: controller.signal
