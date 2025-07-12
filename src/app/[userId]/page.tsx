@@ -160,9 +160,26 @@ export default function UserPage() {
   // 共同话题相关状态
   const [commonTopics, setCommonTopics] = useState<any[]>([]);
   const [loadingTopics, setLoadingTopics] = useState(false);
+  // const [topicsLoading, setTopicsLoading] = useState(false);
+  // const [hasRequestedTopics, setHasRequestedTopics] = useState(false);
+  const isRequestingTopics = useRef(false);
+  const hasRequestedTopics = useRef(false);
 
   // 定位相关状态
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+
+  // 自动获取定位
+  useEffect(() => {
+    if (!userLocation && typeof window !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        pos => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        err => {
+          setUserLocation(null);
+        },
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
+    }
+  }, []);
 
   // 获取当前登录用户
   useEffect(() => {
@@ -223,21 +240,29 @@ export default function UserPage() {
 
   // 生成共同话题
   const generateCommonTopics = async () => {
-    if (!currentUser || !user || currentUser.id === user.id) return;
+    // if (topicsLoading || hasRequestedTopics) return;
+    if (!user || !currentUser || currentUser.id === user.id) return;
+    if (isRequestingTopics.current) return; // 防止并发请求
     
+    console.log('[DEBUG] 开始生成共同话题:', { currentUser: currentUser.id, targetUser: user.id, location: userLocation });
+    isRequestingTopics.current = true;
     setLoadingTopics(true);
+    // setTopicsLoading(true);
+    // setHasRequestedTopics(true);
     try {
       const response = await fetch('/api/generate-common-topics', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           currentUserId: currentUser.id, 
-          targetUserId: user.id 
+          targetUserId: user.id,
+          location: userLocation // 新增
         }),
       });
-      
       const data = await response.json();
+      console.log('[DEBUG] API 响应数据:', data);
       if (data.success) {
+        console.log('[DEBUG] 设置共同话题:', data.topics);
         setCommonTopics(data.topics || []);
       } else {
         console.error('生成共同话题失败:', data.error);
@@ -246,6 +271,8 @@ export default function UserPage() {
       console.error('生成共同话题时发生错误:', error);
     } finally {
       setLoadingTopics(false);
+      isRequestingTopics.current = false;
+      // setTopicsLoading(false);
     }
   };
 
@@ -299,11 +326,12 @@ export default function UserPage() {
 
   // 自动生成共同话题（仅非本机主页）
   useEffect(() => {
-    if (user && currentUser && !isOwnPage) {
+    if (user && currentUser && !isOwnPage && !hasRequestedTopics.current && userLocation) {
+      hasRequestedTopics.current = true;
       generateCommonTopics();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, currentUser, isOwnPage]);
+  }, [user, currentUser, isOwnPage, userLocation]);
 
   // 加载状态
   if (loading) {
@@ -364,27 +392,41 @@ export default function UserPage() {
   // 显示用户笔记页面
   if (!isOwnPage) {
     // 非本机主页：只展示共同话题
+    const emojiList = ['🧩', '🌍', '🤖', '💡', '🎮', '🎤', '🍔', '🏞️', '🎨', '📚'];
     return (
       <div className="min-h-screen bg-[#f1f5fb] flex flex-col items-center justify-center py-12">
-        <div className="max-w-xl w-full bg-white rounded-2xl shadow-lg p-8">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">Nebula为你们生成的共同话题</h2>
+        <div className="max-w-xl w-full bg-white rounded-3xl shadow-lg p-10">
+          <h2 className="text-3xl font-extrabold text-[#6c4cff] mb-8 text-center flex items-center justify-center gap-2">
+            Nebula为你们生成的超有趣共同话题
+          </h2>
           {loadingTopics ? (
-            <div className="text-center text-gray-500 py-12 text-lg">AI生成中...</div>
+            <div className="text-center text-gray-500 py-12 text-lg">AI正在冥思苦想中...</div>
           ) : (
             <>
               {commonTopics.length === 0 ? (
-                <div className="text-center text-gray-400 py-12">暂无共同话题</div>
+                <div className="text-center text-gray-400 py-12">暂无共同话题，快多写点笔记试试吧！</div>
               ) : (
-                <ul className="space-y-6">
+                <ul className="space-y-7">
                   {commonTopics.map((topic, i) => (
-                    <li key={i} className="bg-[#f1f5fb] rounded-xl p-5 shadow-sm border border-[#ececff]">
-                      <div className="text-lg font-semibold text-[#3a2e6c] mb-2">{topic.title}</div>
-                      <div className="text-gray-700 mb-1">{topic.description}</div>
-                      {topic.reasoning && <div className="text-xs text-gray-400 mt-2">AI分析：{topic.reasoning}</div>}
+                    <li key={i} className="bg-[#f8f7ff] rounded-2xl p-6 shadow border border-[#ececff] flex flex-col gap-2 hover:scale-[1.03] transition-transform">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-2xl">{emojiList[i % emojiList.length]}</span>
+                        <span className="text-lg font-bold text-[#3a2e6c]">{topic.title}</span>
+                      </div>
+                      {topic.insight && (
+                        <div className="text-sm text-purple-600 mb-2 italic">💡 {topic.insight}</div>
+                      )}
+                      <div className="text-gray-700 mb-1">你们可以聊聊：{topic.suggestion}</div>
+                      {topic.source && (
+                        <div className="text-xs text-gray-500 mt-2">{topic.source}</div>
+                      )}
                     </li>
                   ))}
                 </ul>
               )}
+              <div className="text-center text-purple-600 mt-10 text-lg font-semibold animate-bounce">
+                别害羞，快和对方聊聊这些话题吧！🎉
+              </div>
             </>
           )}
         </div>
@@ -446,123 +488,127 @@ export default function UserPage() {
           </button>
         </div> */}
         {/* 输入区 */}
-        <div className="bg-white rounded-xl shadow p-6 mb-8 max-w-4xl w-full mx-auto">
-          {/* Toggle按钮：输入区上方 */}
-          <div className="flex items-center gap-2 mb-4">
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-8 max-w-4xl w-full mx-auto backdrop-blur-sm transition-all duration-300 hover:shadow-xl">
+          {/* Toggle按钮：输入区上方 - 整个区域可点击的toggle */}
+          <div className="flex items-center justify-center mb-6">
             <button
-              className={`flex items-center gap-1 rounded-full px-6 py-2 text-lg font-semibold transition-all border ${mode==='ai' ? 'bg-[#a5a6f6] text-white border-[#a5a6f6]' : 'bg-gray-100 text-gray-500 border-gray-200'}`}
-              onClick={()=>setMode('ai')}
+              className="relative bg-gray-100 rounded-full p-1 flex cursor-pointer hover:bg-gray-200 transition-all duration-300"
+              onClick={() => setMode(mode === 'ai' ? 'note' : 'ai')}
             >
-              AI对话
+              <div 
+                className={`absolute top-1 bottom-1 bg-[#a5a6f6] rounded-full transition-all duration-300 ease-out shadow-md ${mode === 'ai' ? 'left-1 w-[90px]' : 'left-[95px] w-[90px]'}`}
+              />
+              <div
+                className={`relative z-10 px-6 py-2 text-base font-semibold transition-all duration-300 rounded-full ${mode === 'ai' ? 'text-white' : 'text-gray-600'}`}
+              >
+                AI对话
+              </div>
+              <div
+                className={`relative z-10 px-6 py-2 text-base font-semibold transition-all duration-300 rounded-full ${mode === 'note' ? 'text-white' : 'text-gray-600'}`}
+              >
+                写笔记
+              </div>
             </button>
-            <button
-              className={`flex items-center gap-1 rounded-full px-6 py-2 text-lg font-semibold transition-all border ${mode==='note' ? 'bg-[#a5a6f6] text-white border-[#a5a6f6]' : 'bg-gray-100 text-gray-500 border-gray-200'}`}
-              onClick={()=>setMode('note')}
-            >
-              写笔记
-            </button>
-            {/* 定位开关，仅AI对话模式下显示 */}
-            {/* {mode === 'ai' && (
-              <label className="flex items-center ml-6 cursor-pointer select-none" style={{height: 40}}>
-                <input
-                  type="checkbox"
-                  checked={!!userLocation}
-                  onChange={e => {
-                    if (e.target.checked) {
-                      if (!navigator.geolocation) {
-                        alert('当前浏览器不支持定位');
-                        return;
-                      }
-                      navigator.geolocation.getCurrentPosition(
-                        pos => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-                        err => { alert('定位失败: ' + err.message); setUserLocation(null); },
-                        { enableHighAccuracy: true }
-                      );
-                    } else {
-                      setUserLocation(null);
-                    }
-                  }}
-                  className="mr-2 accent-[#a5a6f6] w-5 h-5"
-                  style={{ accentColor: '#a5a6f6' }}
-                />
-                <span className="text-base text-gray-700">定位 {userLocation ? '已开启' : '关闭'}</span>
-              </label>
-            )} */}
           </div>
-          <textarea
-            className="w-full h-28 rounded-lg border border-[#e6e6fa] p-4 text-lg text-black focus:outline-none focus:ring-2 focus:ring-[#a5a6f6] resize-none mb-4"
-            placeholder={mode === 'note' ? '写下你的想法...' : '向AI提问或对话...'}
-            value={input}
-            onChange={e => setInput(e.target.value)}
-          />
-          <button
-            className="w-32 h-12 rounded-full bg-[#a5a6f6] hover:bg-[#7c7cf7] text-white text-lg font-semibold shadow transition-all float-right"
-            onClick={async () => {
-              if (mode === 'note') {
-                // 保存笔记到Supabase
-                if (!input.trim()) return;
-                setAdding(true);
-                try {
-                  const { data, error } = await supabase
-                    .from("notes")
-                    .insert([{ user_id: userId, content: input.trim() }])
-                    .select()
-                    .single();
-                  if (!error && data) {
-                    setNotes([data, ...notes]);
-                    setInput("");
-                  } else {
-                    console.error('保存笔记失败:', error);
-                  }
-                } catch (error) {
-                  console.error('保存笔记异常:', error);
-                } finally {
-                  setAdding(false);
+
+          {/* 输入框容器 */}
+          <div className="relative">
+            <textarea
+              className="w-full h-32 rounded-xl border-2 border-gray-200 p-4 text-lg text-gray-800 focus:outline-none focus:border-[#a5a6f6] focus:ring-4 focus:ring-[#a5a6f6]/20 resize-none transition-all duration-300 placeholder-gray-400 bg-gray-50 focus:bg-white"
+              placeholder={mode === 'note' ? '写下你的想法...' : '向AI提问或对话...'}
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  document.getElementById('submit-btn')?.click();
                 }
-              } else {
-                // AI对话逻辑
-                if (!input.trim()) return;
-                setChatSending(true);
-                setChatMessages(msgs => [...msgs, { role: 'user', content: input }]);
-                
-                // 保存AI对话内容到Supabase
-                try {
-                  const { data: noteData, error: noteError } = await supabase
-                    .from("notes")
-                    .insert([{ user_id: userId, content: input.trim() }])
-                    .select()
-                    .single();
+              }}
+            />
+            
+            {/* 提交按钮 - 浮动在右下角 */}
+            <button
+              id="submit-btn"
+              className={`absolute bottom-3 right-3 w-12 h-12 rounded-full shadow-lg transition-all duration-300 flex items-center justify-center font-semibold text-white transform hover:scale-105 active:scale-95 ${
+                (adding || chatSending) ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#a5a6f6] hover:bg-[#7c7cf7] hover:shadow-xl'
+              }`}
+              onClick={async () => {
+                if (mode === 'note') {
+                  // 保存笔记到Supabase
+                  if (!input.trim()) return;
+                  setAdding(true);
+                  try {
+                    const { data, error } = await supabase
+                      .from("notes")
+                      .insert([{ user_id: userId, content: input.trim() }])
+                      .select()
+                      .single();
+                    if (!error && data) {
+                      setNotes([data, ...notes]);
+                      setInput("");
+                    } else {
+                      console.error('保存笔记失败:', error);
+                    }
+                  } catch (error) {
+                    console.error('保存笔记异常:', error);
+                  } finally {
+                    setAdding(false);
+                  }
+                } else {
+                  // AI对话逻辑
+                  if (!input.trim()) return;
+                  setChatSending(true);
+                  setChatMessages(msgs => [...msgs, { role: 'user', content: input }]);
                   
-                  if (!noteError && noteData) {
-                    // 添加到本地状态
-                    setNotes([noteData, ...notes]);
-                  } else {
-                    console.error('保存AI对话到数据库失败:', noteError);
+                  // 保存AI对话内容到Supabase
+                  try {
+                    const { data: noteData, error: noteError } = await supabase
+                      .from("notes")
+                      .insert([{ user_id: userId, content: input.trim() }])
+                      .select()
+                      .single();
+                    
+                    if (!noteError && noteData) {
+                      // 添加到本地状态
+                      setNotes([noteData, ...notes]);
+                    } else {
+                      console.error('保存AI对话到数据库失败:', noteError);
+                    }
+                  } catch (error) {
+                    console.error('保存AI对话失败:', error);
                   }
-                } catch (error) {
-                  console.error('保存AI对话失败:', error);
+                  
+                  try {
+                    const res = await fetch('/api/ai-chat', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ userId, message: input }),
+                    });
+                    const data = await res.json();
+                    setChatMessages(msgs => [...msgs, { role: 'ai', content: data.reply || 'AI无回复' }]);
+                    setInput("");
+                  } catch {
+                    setChatMessages(msgs => [...msgs, { role: 'ai', content: 'AI服务异常' }]);
+                  }
+                  setChatSending(false);
                 }
-                
-                try {
-                  const res = await fetch('/api/ai-chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userId, message: input }),
-                  });
-                  const data = await res.json();
-                  setChatMessages(msgs => [...msgs, { role: 'ai', content: data.reply || 'AI无回复' }]);
-                  setInput("");
-                } catch {
-                  setChatMessages(msgs => [...msgs, { role: 'ai', content: 'AI服务异常' }]);
-                }
-                setChatSending(false);
-              }
-            }}
-            disabled={adding || chatSending}
-          >
-            {mode === 'note' ? (adding ? '保存中...' : '记录') : (chatSending ? '发送中...' : '聊天')}
-          </button>
-          <div className="clear-both" />
+              }}
+              disabled={adding || chatSending}
+            >
+              {(adding || chatSending) ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+              )}
+            </button>
+          </div>
+
+          {/* 快捷键提示
+          <div className="mt-3 text-xs text-gray-400 text-center">
+            {mode === 'note' ? '💡 Cmd/Ctrl + Enter 快速记录' : '💡 Cmd/Ctrl + Enter 快速发送'}
+          </div> */}
           {/* AI对话历史，仅AI模式下显示 */}
           {mode === 'ai' && (
             <div className="w-full mt-6 flex flex-col gap-3">
