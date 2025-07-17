@@ -108,8 +108,22 @@ ${notesText}
 
       let tags: string[] = [];
       try {
+        // 首先尝试清理和格式化 AI 返回的内容
+        let cleanedResponse = aiResponse.trim();
+        
+        // 移除可能的代码块标记
+        cleanedResponse = cleanedResponse.replace(/```json\s*|\s*```/g, '');
+        
+        // 移除多余的空白字符和换行符，使其成为有效的 JSON
+        cleanedResponse = cleanedResponse.replace(/\[\s*\n\s*/g, '[');
+        cleanedResponse = cleanedResponse.replace(/\s*\n\s*\]/g, ']');
+        cleanedResponse = cleanedResponse.replace(/\s*\n\s*/g, ', ');
+        cleanedResponse = cleanedResponse.replace(/,\s*]/g, ']');
+        
+        console.log('🧹 清理后的内容:', cleanedResponse);
+        
         // 尝试解析 JSON
-        tags = JSON.parse(aiResponse);
+        tags = JSON.parse(cleanedResponse);
         
         // 确保 tags 是数组
         if (!Array.isArray(tags)) {
@@ -174,20 +188,34 @@ ${notesText}
 function extractTagsFromText(text: string): string[] {
   const tags: string[] = [];
   
-  // 尝试匹配方括号中的内容
-  const bracketMatch = text.match(/\[(.*?)\]/);
-  if (bracketMatch) {
-    const content = bracketMatch[1];
+  // 尝试匹配多行数组格式 (处理换行的数组)
+  // 先将换行符替换为空格，然后匹配
+  const normalizedText = text.replace(/\n/g, ' ');
+  const multilineArrayMatch = normalizedText.match(/\[\s*((?:"[^"]*"(?:\s*,\s*)?)+)\s*\]/);
+  if (multilineArrayMatch) {
+    const content = multilineArrayMatch[1];
     const items = content.split(',').map(item => item.trim().replace(/['"]/g, ''));
     tags.push(...items.filter(item => item.length > 0 && item.length <= 8));
   }
   
-  // 尝试匹配引号中的内容
-  const quoteMatches = text.match(/"([^"]+)"/g);
-  if (quoteMatches) {
-    const items = quoteMatches.map(match => match.replace(/"/g, ''));
-    tags.push(...items.filter(item => item.length > 0 && item.length <= 8));
+  // 尝试匹配方括号中的内容 (单行格式)
+  if (tags.length === 0) {
+    const bracketMatch = text.match(/\[(.*?)\]/);
+    if (bracketMatch) {
+      const content = bracketMatch[1];
+      const items = content.split(',').map(item => item.trim().replace(/['"]/g, ''));
+      tags.push(...items.filter(item => item.length > 0 && item.length <= 8));
+    }
   }
   
-  return tags.slice(0, 8); // 最多返回8个标签
+  // 尝试匹配引号中的内容
+  if (tags.length === 0) {
+    const quoteMatches = text.match(/"([^"]+)"/g);
+    if (quoteMatches) {
+      const items = quoteMatches.map(match => match.replace(/"/g, ''));
+      tags.push(...items.filter(item => item.length > 0 && item.length <= 8));
+    }
+  }
+  
+  return tags.slice(0, 12); // 最多返回12个标签
 } 

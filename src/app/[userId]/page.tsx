@@ -1,25 +1,21 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
-import { useParams } from "next/navigation";
-import Link from "next/link";
-import { supabase } from "../supabaseClient";
-import { getCurrentUser, getUserById, saveUserToStorage } from "../utils/userUtils";
-import AuthForm from "../AuthForm";
+
+import { useState, useEffect, useRef } from 'react';
+import { useParams } from 'next/navigation';
+import Link from 'next/link';
+import AuthForm from '../AuthForm';
+import { getCurrentUser, User } from '../utils/userUtils';
+import { supabase } from '../supabaseClient';
+import LoadingSpinner from '../components/LoadingSpinner';
 
 interface Note {
   id: string;
   content: string;
   created_at: string;
+  user_id: string;
 }
 
-interface User {
-  id: string;
-  username: string;
-  password?: string;
-  created_at?: string;
-}
-
-// AI聊天模态框组件
+// AI 对话模态框组件
 function ChatModal({ open, onClose, messages, onSend, sending, anchorRef }: {
   open: boolean;
   onClose: () => void;
@@ -29,35 +25,22 @@ function ChatModal({ open, onClose, messages, onSend, sending, anchorRef }: {
   anchorRef: React.RefObject<HTMLButtonElement | null>;
 }) {
   const [input, setInput] = useState("");
-  const [position, setPosition] = useState<{top: number, left: number, width: number}>({top: 0, left: 0, width: 0});
   const modalRef = useRef<HTMLDivElement>(null);
 
+  // 计算模态框位置
+  const [position, setPosition] = useState({ top: 0, left: 0 });
   useEffect(() => {
     if (open && anchorRef.current) {
       const rect = anchorRef.current.getBoundingClientRect();
       setPosition({
-        top: rect.top - 320,
+        top: rect.top - 280,
         left: rect.left + rect.width / 2,
-        width: rect.width
       });
     }
   }, [open, anchorRef]);
 
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (modalRef.current && !modalRef.current.contains(event.target as Node) && open) {
-        onClose();
-      }
-    }
-    if (open) {
-      document.addEventListener('mousedown', handleClickOutside);
-    } else {
-      document.removeEventListener('mousedown', handleClickOutside);
-    }
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [open, onClose]);
-
   if (!open) return null;
+
   return (
     <div style={{
       position: 'fixed',
@@ -69,71 +52,143 @@ function ChatModal({ open, onClose, messages, onSend, sending, anchorRef }: {
       maxWidth: '90vw',
       boxSizing: 'border-box',
     }} ref={modalRef}>
-      <div className="bg-[#f1f5fb] rounded-2xl shadow-lg flex flex-col p-6 relative border border-gray-200" style={{minHeight: 240, boxShadow: '0 6px 32px 0 rgba(80,80,120,0.10)'}}>
-        <button className="absolute top-4 right-6 text-2xl text-gray-400 hover:text-gray-600" onClick={onClose}>&times;</button>
-        <div className="flex-1 overflow-y-auto mb-4 space-y-4 pr-2" style={{maxHeight: 140}}>
+      <div 
+        className="glass-effect rounded-2xl p-6 relative"
+        style={{ 
+          minHeight: 240,
+          background: 'var(--background)',
+          border: '1px solid var(--separator)',
+          boxShadow: 'var(--shadow-4)'
+        }}
+      >
+        <button 
+          className="absolute top-4 right-6 text-2xl transition-colors duration-200 hover:opacity-60"
+          style={{ color: 'var(--foreground-tertiary)' }}
+          onClick={onClose}
+        >
+          ×
+        </button>
+        
+        <div className="flex-1 overflow-y-auto mb-4 space-y-4 pr-2" style={{ maxHeight: 140 }}>
           {messages.length === 0 ? (
-            <div className="text-center text-gray-400 mt-10">和AI聊聊你的笔记吧~</div>
+            <div 
+              className="text-center mt-10"
+              style={{ color: 'var(--foreground-tertiary)' }}
+            >
+              和 AI 聊聊你的笔记吧~
+            </div>
           ) : messages.map((msg, i) => (
             <div key={i} className={msg.role === 'user' ? 'text-right' : 'text-left'}>
-              <span className={msg.role === 'user' ? 'inline-block bg-blue-100 text-blue-800 rounded-lg px-3 py-2' : 'inline-block bg-gray-200 text-gray-800 rounded-lg px-3 py-2'}>
+              <span 
+                className={`inline-block rounded-xl px-3 py-2 ${
+                  msg.role === 'user' 
+                    ? 'bg-blue-500 text-white' 
+                    : 'bg-gray-100 text-gray-800'
+                }`}
+                style={{
+                  background: msg.role === 'user' ? 'var(--primary)' : 'var(--background-secondary)',
+                  color: msg.role === 'user' ? 'white' : 'var(--foreground)'
+                }}
+              >
                 {msg.content}
               </span>
             </div>
           ))}
         </div>
+        
         <div className="flex items-center gap-2 pt-2">
           <input
-            className="flex-1 rounded-lg border border-gray-300 p-2 text-base focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white text-black"
+            className="input-field flex-1 text-base"
             value={input}
             onChange={e => setInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && input.trim() && !sending) { onSend(input); setInput(""); } }}
+            onKeyDown={e => { 
+              if (e.key === 'Enter' && input.trim() && !sending) { 
+                onSend(input); 
+                setInput(""); 
+              } 
+            }}
             placeholder="输入你的问题..."
             disabled={sending}
-            style={{minWidth: 0}}
           />
           <button
-            className="rounded-full bg-[#e5e4fa] px-4 py-2 text-black text-base shadow border border-[#d1d0e7] hover:bg-[#d1d0e7] transition-all disabled:opacity-60 min-w-[56px]"
-            onClick={() => { if (input.trim()) { onSend(input); setInput(""); } }}
+            className="button-secondary px-4 py-2 text-base disabled:opacity-60"
+            onClick={() => { 
+              if (input.trim()) { 
+                onSend(input); 
+                setInput(""); 
+              } 
+            }}
             disabled={!input.trim() || sending}
-          >发送</button>
+          >
+            发送
+          </button>
         </div>
       </div>
     </div>
   );
 }
 
-// 新增便签纸条组件
-function NoteSticker({ content, index }: { content: string; index: number }) {
-  // 让每条纸条有不同的旋转角度和轻微错位
-  const angle = (index % 2 === 0 ? 1 : -1) * (6 + (index % 3) * 2 + Math.random() * 2); // -10~+10度
-  const marginX = (index % 2 === 0 ? 1 : -1) * (8 + Math.random() * 8); // -16~+16px
+// 新的便签组件 - 苹果风格
+function NoteCard({ content, index, onEdit, onDelete }: { 
+  content: string; 
+  index: number; 
+  onEdit?: (content: string) => void;
+  onDelete?: () => void;
+}) {
+  const [isHovered, setIsHovered] = useState(false);
+  
   return (
     <div
+      className="group relative transition-all duration-300 ease-out hover:scale-105"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       style={{
-        transform: `rotate(${angle}deg)` + ` translateX(${marginX}px)`,
-        background: '#f5f5f0',
-        color: '#222',
-        boxShadow: '0 2px 12px #0002',
-        minWidth: 180,
-        maxWidth: 340,
-        minHeight: 38,
-        padding: '12px 24px',
-        borderRadius: 4,
-        fontSize: 22,
-        fontFamily: 'monospace, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-        fontWeight: 600,
-        marginBottom: 24,
-        marginTop: 8,
-        letterSpacing: 1,
-        border: 'none',
-        outline: 'none',
-        userSelect: 'text',
-        whiteSpace: 'pre-line',
-        transition: 'box-shadow .2s',
+        transform: `rotate(${(index % 2 === 0 ? 1 : -1) * (Math.random() * 2 + 1)}deg)`,
       }}
     >
-      {content}
+      <div
+        className="card p-6 min-h-[120px] min-w-[200px] max-w-[280px] relative"
+        style={{
+          background: 'var(--background)',
+          boxShadow: isHovered ? 'var(--shadow-3)' : 'var(--shadow-2)',
+        }}
+      >
+        <div 
+          className="text-base leading-relaxed"
+          style={{ 
+            color: 'var(--foreground)',
+            fontFamily: 'var(--font-sans)',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word'
+          }}
+        >
+          {content}
+        </div>
+        
+        {/* 操作按钮 - 只在悬停时显示 */}
+        {(onEdit || onDelete) && (
+          <div className={`absolute top-2 right-2 flex gap-1 transition-opacity duration-200 ${
+            isHovered ? 'opacity-100' : 'opacity-0'
+          }`}>
+            {onEdit && (
+              <button
+                className="w-6 h-6 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-xs transition-colors duration-200"
+                onClick={() => onEdit(content)}
+              >
+                ✏️
+              </button>
+            )}
+            {onDelete && (
+              <button
+                className="w-6 h-6 rounded-full bg-red-100 hover:bg-red-200 flex items-center justify-center text-xs transition-colors duration-200"
+                onClick={onDelete}
+              >
+                🗑️
+              </button>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -160,10 +215,13 @@ export default function UserPage() {
   // 共同话题相关状态
   const [commonTopics, setCommonTopics] = useState<any[]>([]);
   const [loadingTopics, setLoadingTopics] = useState(false);
-  // const [topicsLoading, setTopicsLoading] = useState(false);
-  // const [hasRequestedTopics, setHasRequestedTopics] = useState(false);
   const isRequestingTopics = useRef(false);
   const hasRequestedTopics = useRef(false);
+
+  // 好友系统相关状态
+  const [friendshipStatus, setFriendshipStatus] = useState<'none' | 'friends'>('none');
+  const [friendsLoading, setFriendsLoading] = useState(false);
+  const [likeStatus, setLikeStatus] = useState<{liked: boolean, count: number}>({liked: false, count: 0});
 
   // 定位相关状态
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
@@ -173,177 +231,267 @@ export default function UserPage() {
     if (!userLocation && typeof window !== 'undefined' && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         pos => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-        err => {
-          setUserLocation(null);
-        },
+        err => setUserLocation(null),
         { enableHighAccuracy: true, timeout: 8000 }
       );
     }
   }, []);
 
-  // 获取当前登录用户
+  // 获取当前用户
   useEffect(() => {
-    const currentUserData = getCurrentUser();
-    setCurrentUser(currentUserData);
-  }, []);
+    const current = getCurrentUser();
+    setCurrentUser(current);
+    setIsOwnPage(current?.id === userId);
+  }, [userId]);
 
   // 获取页面用户信息
   useEffect(() => {
-    const fetchUserData = async () => {
-      if (!userId) return;
-      
-      try {
-        const userData = await getUserById(userId);
-        if (userData) {
-          setUser(userData);
-          // 检查是否是自己的页面
-          if (currentUser && currentUser.id === userId) {
-            setIsOwnPage(true);
-          }
-        } else {
-          // 用户不存在，显示注册页面
-          setShowAuth(true);
-        }
-      } catch (error) {
-        console.error('获取用户信息失败:', error);
-        setShowAuth(true);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUserData();
-  }, [userId, currentUser]);
-
-  // 获取用户笔记
-  useEffect(() => {
-    const fetchNotes = async () => {
-      if (!userId || !user) return;
-      
+    async function fetchUser() {
       try {
         const { data, error } = await supabase
-          .from("notes")
-          .select("id, content, created_at")
-          .eq("user_id", userId)
-          .order("created_at", { ascending: false });
-        
-        if (!error && data) {
-          setNotes(data);
+          .from('users')
+          .select('*')
+          .eq('id', userId)
+          .single();
+
+        if (error || !data) {
+          setShowAuth(true);
+        } else {
+          setUser(data);
         }
       } catch (error) {
-        console.error('获取笔记失败:', error);
+        console.error('获取用户失败:', error);
+        setShowAuth(true);
       }
-    };
+      setLoading(false);
+    }
+
+    fetchUser();
+  }, [userId]);
+
+  // 获取笔记
+  useEffect(() => {
+    if (!user || !currentUser) return;
+
+    async function fetchNotes() {
+      const { data, error } = await supabase
+        .from('notes')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (!error && data) {
+        setNotes(data);
+      }
+    }
 
     fetchNotes();
-  }, [userId, user]);
+  }, [user, currentUser, userId]);
 
-  // 生成共同话题
-  const generateCommonTopics = async () => {
-    // if (topicsLoading || hasRequestedTopics) return;
-    if (!user || !currentUser || currentUser.id === user.id) return;
-    if (isRequestingTopics.current) return; // 防止并发请求
-    
-    console.log('[DEBUG] 开始生成共同话题:', { currentUser: currentUser.id, targetUser: user.id, location: userLocation });
-    isRequestingTopics.current = true;
-    setLoadingTopics(true);
-    // setTopicsLoading(true);
-    // setHasRequestedTopics(true);
-    try {
-      const response = await fetch('/api/generate-common-topics', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          currentUserId: currentUser.id, 
-          targetUserId: user.id,
-          location: userLocation // 新增
-        }),
-      });
-      const data = await response.json();
-      console.log('[DEBUG] API 响应数据:', data);
-      if (data.success) {
-        console.log('[DEBUG] 设置共同话题:', data.topics);
-        setCommonTopics(data.topics || []);
-      } else {
-        console.error('生成共同话题失败:', data.error);
-      }
-    } catch (error) {
-      console.error('生成共同话题时发生错误:', error);
-    } finally {
-      setLoadingTopics(false);
-      isRequestingTopics.current = false;
-      // setTopicsLoading(false);
-    }
-  };
+  // 检查好友状态和点赞状态
+  useEffect(() => {
+    if (!currentUser || !user || currentUser.id === user.id) return;
 
-  // 添加笔记
-  const handleAdd = async () => {
-    if (!input.trim() || !user || !isOwnPage) return;
-    setAdding(true);
-    const { data, error } = await supabase
-      .from("notes")
-      .insert({ content: input, user_id: user.id })
-      .select()
-      .single();
-    setAdding(false);
-    if (!error && data) {
-      setNotes([data, ...notes]);
-      setInput("");
-    }
-  };
-
-  // 处理注册成功
-  const handleAuthSuccess = async (authUser: User) => {
-    // 如果注册的用户ID与URL中的ID不匹配，更新用户ID
-    if (authUser.id !== userId) {
+    async function checkRelationship() {
       try {
-        // 更新用户ID
-        const { data, error } = await supabase
-          .from("users")
-          .update({ id: userId })
-          .eq("id", authUser.id)
-          .select()
-          .single();
+        if (!currentUser || !user) return;
         
-        if (!error && data) {
-          // 更新localStorage中的用户信息
-          saveUserToStorage(data);
-          setCurrentUser(data);
-          setUser(data);
-          setIsOwnPage(true);
-          setShowAuth(false);
+                 // 检查好友状态
+         const { data: friendship } = await supabase
+           .from('friendships')
+           .select('*')
+           .or(`and(user1_id.eq.${currentUser.id},user2_id.eq.${user.id}),and(user1_id.eq.${user.id},user2_id.eq.${currentUser.id})`)
+           .single();
+
+         setFriendshipStatus(friendship ? 'friends' : 'none');
+
+         if (friendship && currentUser && user) {
+           // 检查点赞状态
+           const [{ data: likeData }, { count: likeCount }] = await Promise.all([
+             supabase
+               .from('likes')
+               .select('*')
+               .eq('liker_id', currentUser.id)
+               .eq('target_user_id', user.id)
+               .single(),
+             supabase
+               .from('likes')
+               .select('*', { count: 'exact', head: true })
+               .eq('target_user_id', user.id)
+           ]);
+
+           setLikeStatus({
+             liked: !!likeData,
+             count: likeCount || 0
+           });
+         }
+      } catch (error) {
+        console.error('检查关系状态失败:', error);
+      }
+    }
+
+    checkRelationship();
+  }, [currentUser, user]);
+
+  // 获取共同话题
+  useEffect(() => {
+    if (!currentUser || !user || currentUser.id === user.id || hasRequestedTopics.current || isRequestingTopics.current) return;
+
+    async function fetchCommonTopics() {
+      if (isRequestingTopics.current) return;
+      
+      isRequestingTopics.current = true;
+      hasRequestedTopics.current = true;
+      setLoadingTopics(true);
+
+      try {
+        if (!currentUser || !user) return;
+        
+        const response = await fetch('/api/generate-common-topics', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            userId1: currentUser.id, 
+            userId2: user.id,
+            location: userLocation 
+          }),
+        });
+
+        const data = await response.json();
+        if (data.success && data.topics) {
+          setCommonTopics(data.topics);
         }
       } catch (error) {
-        console.error('更新用户ID失败:', error);
+        console.error('获取共同话题失败:', error);
+      } finally {
+        setLoadingTopics(false);
+        isRequestingTopics.current = false;
       }
-    } else {
-      setCurrentUser(authUser);
-      setUser(authUser);
-      setIsOwnPage(true);
-      setShowAuth(false);
+    }
+
+    const timer = setTimeout(fetchCommonTopics, 1000);
+    return () => clearTimeout(timer);
+  }, [currentUser, user, userLocation]);
+
+  // 添加笔记
+  const handleAddNote = async () => {
+    if (!input.trim() || adding || !currentUser || !user) return;
+
+    setAdding(true);
+    try {
+      const { data, error } = await supabase
+        .from('notes')
+        .insert([{
+          user_id: currentUser.id,
+          content: input.trim(),
+        }])
+        .select()
+        .single();
+
+      if (!error && data) {
+        setNotes([data, ...notes]);
+        setInput("");
+      }
+    } catch (error) {
+      console.error('添加笔记失败:', error);
+    }
+    setAdding(false);
+  };
+
+  // AI 对话
+  const handleAIChat = async (message: string) => {
+    if (!currentUser || !user) return;
+
+    setChatMessages([...chatMessages, { role: 'user', content: message }]);
+    setChatSending(true);
+    try {
+      const res = await fetch('/api/ai-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUser.id, message }),
+      });
+      const data = await res.json();
+      setChatMessages(current => [...current, { role: 'ai', content: data.reply || 'AI 没有返回内容' }]);
+    } catch {
+      setChatMessages(current => [...current, { role: 'ai', content: 'AI 回复失败，请重试' }]);
+    }
+    setChatSending(false);
+  };
+
+  // 添加好友
+  const handleAddFriend = async () => {
+    if (!currentUser || !user || friendsLoading) return;
+
+    setFriendsLoading(true);
+    try {
+      const response = await fetch('/api/friends', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentUserId: currentUser.id,
+          targetUserId: user.id,
+        }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setFriendshipStatus('friends');
+        // 重新检查点赞状态
+        const { count } = await supabase
+          .from('likes')
+          .select('*', { count: 'exact', head: true })
+          .eq('target_user_id', user.id);
+        
+        setLikeStatus(prev => ({ ...prev, count: count || 0 }));
+      }
+    } catch (error) {
+      console.error('添加好友失败:', error);
+    }
+    setFriendsLoading(false);
+  };
+
+  // 点赞/取消点赞
+  const handleLike = async () => {
+    if (!currentUser || !user || friendshipStatus !== 'friends') return;
+
+    try {
+      const response = await fetch('/api/likes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          likerId: currentUser.id,
+          targetUserId: user.id,
+        }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setLikeStatus({
+          liked: data.action === 'liked',
+          count: data.likeCount || 0
+        });
+      }
+    } catch (error) {
+      console.error('点赞操作失败:', error);
     }
   };
 
-  // 自动生成共同话题（仅非本机主页）
-  useEffect(() => {
-    if (user && currentUser && !isOwnPage && !hasRequestedTopics.current && userLocation) {
-      hasRequestedTopics.current = true;
-      generateCommonTopics();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, currentUser, isOwnPage, userLocation]);
+  // 认证成功回调
+  const handleAuthSuccess = (userData: User) => {
+    localStorage.setItem('currentUser', JSON.stringify(userData));
+    setCurrentUser(userData);
+    setUser(userData);
+    setIsOwnPage(true);
+    setShowAuth(false);
+  };
 
-  // 加载状态
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f1f5fb]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#a5a6f6] mx-auto mb-4"></div>
-          <div className="text-gray-600">正在加载用户信息...</div>
-          <div className="text-sm text-gray-500 mt-2">
-            用户ID: {userId}
-          </div>
-        </div>
+      <div 
+        className="min-h-screen flex items-center justify-center"
+        style={{ background: 'var(--background-secondary)' }}
+      >
+        <LoadingSpinner size="lg" text="" />
       </div>
     );
   }
@@ -351,22 +499,37 @@ export default function UserPage() {
   // 显示注册/登录页面
   if (showAuth) {
     return (
-      <div className="min-h-screen bg-[#f1f5fb] py-8 px-4">
-        <div className="max-w-md mx-auto">
-          <div className="text-center mb-8">
-            <div className="text-4xl mb-4">🎯</div>
-            <h1 className="text-2xl font-bold text-gray-800 mb-2">Nebula</h1>
-            <p className="text-gray-600 mb-4">
-              这个专属链接还没有主人，快来注册成为第一个用户吧！
-            </p>
-            <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-              <div className="text-sm text-blue-800">
-                <strong>专属链接:</strong> {typeof window !== 'undefined' ? `${window.location.origin}/${userId}` : `/${userId}`}
-              </div>
+      <div 
+        className="min-h-screen py-8 px-4 flex flex-col items-center justify-center"
+        style={{ background: 'var(--background-secondary)' }}
+      >
+        <div className="max-w-md mx-auto text-center mb-8">
+          <div className="text-4xl mb-4">🎯</div>
+          <h1 
+            className="text-2xl font-bold mb-2"
+            style={{ color: 'var(--foreground)' }}
+          >
+            这个专属链接还没有主人
+          </h1>
+          <p 
+            className="mb-4"
+            style={{ color: 'var(--foreground-secondary)' }}
+          >
+            快来注册成为第一个用户吧！
+          </p>
+          <div 
+            className="p-4 rounded-xl"
+            style={{ 
+              background: 'var(--primary)',
+              color: 'white'
+            }}
+          >
+            <div className="text-sm">
+              <strong>专属链接:</strong> {typeof window !== 'undefined' ? `${window.location.origin}/${userId}` : `/${userId}`}
             </div>
           </div>
-          <AuthForm onAuth={handleAuthSuccess} customUserId={userId} />
         </div>
+        <AuthForm onAuth={handleAuthSuccess} customUserId={userId} />
       </div>
     );
   }
@@ -374,13 +537,21 @@ export default function UserPage() {
   // 用户不存在
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f1f5fb]">
+      <div 
+        className="min-h-screen flex items-center justify-center"
+        style={{ background: 'var(--background-secondary)' }}
+      >
         <div className="text-center p-8">
-          <div className="text-2xl text-gray-600 mb-4">❌</div>
-          <div className="text-gray-600 mb-4">用户不存在</div>
+          <div className="text-2xl mb-4">❌</div>
+          <div 
+            className="mb-4"
+            style={{ color: 'var(--foreground-secondary)' }}
+          >
+            用户不存在
+          </div>
           <Link 
             href="/" 
-            className="inline-block bg-[#a5a6f6] hover:bg-[#7c7cf7] text-white font-semibold rounded-lg px-6 py-3 transition-all"
+            className="button-primary inline-block px-6 py-3"
           >
             返回主页
           </Link>
@@ -389,44 +560,137 @@ export default function UserPage() {
     );
   }
 
-  // 显示用户笔记页面
+  // 非本人页面：显示共同话题
   if (!isOwnPage) {
-    // 非本机主页：只展示共同话题
-    const emojiList = [ '🌍', '🎮', '🎤', '🍔', '🏞️', '🎨'];
+    const emojiList = ['🌍', '🎮', '🎤', '🍔', '🏞️', '🎨'];
     return (
-      <div className="min-h-screen bg-[#f1f5fb] flex flex-col items-center justify-center py-12">
-        <div className="max-w-xl w-full bg-white rounded-3xl shadow-lg p-10">
-          <h2 className="text-3xl font-extrabold text-[#6c4cff] mb-8 text-center flex items-center justify-center gap-2">
-            Nebula为你们生成的超有趣共同话题
-          </h2>
+      <div 
+        className="min-h-screen flex flex-col items-center justify-center py-12 px-4"
+        style={{ background: 'var(--background-secondary)' }}
+      >
+        <div className="max-w-2xl w-full card p-8 animate-fade-in">
+          <div className="text-center mb-8">
+            <h2 
+              className="text-3xl font-bold mb-4 flex items-center justify-center gap-2"
+              style={{ color: 'var(--primary)' }}
+            >
+              ✦ 共同话题
+            </h2>
+            
+            {currentUser && user && (
+              <div className="flex items-center justify-center gap-4 mb-6">
+                <div 
+                  className="text-sm"
+                  style={{ color: 'var(--foreground-secondary)' }}
+                >
+                  {currentUser.username} & {user.username}
+                </div>
+                {friendshipStatus === 'friends' ? (
+                  <div className="flex items-center gap-3">
+                    <span 
+                      className="inline-flex items-center gap-1 text-sm px-3 py-1 rounded-full"
+                      style={{ 
+                        background: 'var(--success)',
+                        color: 'white'
+                      }}
+                    >
+                      <span>👥</span>
+                      已是好友
+                    </span>
+                    <button
+                      onClick={handleLike}
+                      className={`flex items-center gap-1 px-3 py-1 rounded-full text-sm transition-all duration-200 ${
+                        likeStatus.liked ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600'
+                      }`}
+                    >
+                      <span>{likeStatus.liked ? '❤️' : '🤍'}</span>
+                      <span>{likeStatus.count}</span>
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleAddFriend}
+                    disabled={friendsLoading}
+                    className="button-primary text-sm px-4 py-1 disabled:opacity-50"
+                  >
+                    {friendsLoading ? '添加中...' : '添加好友'}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+          
           {loadingTopics ? (
-            <div className="text-center text-gray-500 py-12 text-lg">AI正在冥思苦想中...</div>
+            <div 
+              className="text-center py-12 text-lg"
+              style={{ color: 'var(--foreground-secondary)' }}
+            >
+              AI正在冥思苦想中...
+            </div>
           ) : (
             <>
               {commonTopics.length === 0 ? (
-                <div className="text-center text-gray-400 py-12">暂无共同话题，快多写点笔记试试吧！</div>
+                <div 
+                  className="text-center py-12"
+                  style={{ color: 'var(--foreground-tertiary)' }}
+                >
+                  暂无共同话题，快多写点笔记试试吧！
+                </div>
               ) : (
-                <ul className="space-y-7">
+                <ul className="space-y-6">
                   {commonTopics.map((topic, i) => (
-                    <li key={i} className="bg-[#f8f7ff] rounded-2xl p-6 shadow border border-[#ececff] flex flex-col gap-2 hover:scale-[1.03] transition-transform">
-                      <div className="flex items-center gap-2 mb-1">
+                    <li 
+                      key={i} 
+                      className="p-6 rounded-2xl transition-transform duration-300 hover:scale-[1.02]"
+                      style={{ 
+                        background: 'var(--background-secondary)',
+                        border: '1px solid var(--separator)'
+                      }}
+                    >
+                      <div className="flex items-center gap-2 mb-3">
                         <span className="text-2xl">{emojiList[i % emojiList.length]}</span>
-                        <span className="text-lg font-bold text-[#3a2e6c]">{topic.title}</span>
+                        <span 
+                          className="text-lg font-bold"
+                          style={{ color: 'var(--foreground)' }}
+                        >
+                          {topic.title}
+                        </span>
                       </div>
                       {topic.insight && (
-                        <div className="text-sm text-purple-600 mb-2 italic">💡 {topic.insight}</div>
+                        <div 
+                          className="text-sm mb-2 italic"
+                          style={{ color: 'var(--secondary)' }}
+                        >
+                          💡 {topic.insight}
+                        </div>
                       )}
-                      <div className="text-gray-700 mb-1">你们可以聊聊：{topic.suggestion}</div>
+                      <div 
+                        className="mb-1"
+                        style={{ color: 'var(--foreground-secondary)' }}
+                      >
+                        你们可以聊聊：{topic.suggestion}
+                      </div>
                       {topic.source && (
-                        <div className="text-xs text-gray-500 mt-2">{topic.source}</div>
+                        <div 
+                          className="text-xs mt-2"
+                          style={{ color: 'var(--foreground-tertiary)' }}
+                        >
+                          {topic.source}
+                        </div>
                       )}
                     </li>
                   ))}
                 </ul>
               )}
-              {/* <div className="text-center text-purple-600 mt-10 text-lg font-semibold animate-bounce">
-                别害羞，快和对方聊聊这些话题吧！🎉
-              </div> */}
+              
+              <div className="mt-8 text-center">
+                <Link 
+                  href="/"
+                  className="button-secondary px-6 py-3"
+                >
+                  返回主页
+                </Link>
+              </div>
             </>
           )}
         </div>
@@ -434,244 +698,203 @@ export default function UserPage() {
     );
   }
 
-  // 显示用户笔记页面
+  // 本人页面：显示笔记界面
   return (
-    <div className="min-h-screen bg-[#f1f5fb] py-8 px-4">
-      <div className="max-w-4xl mx-auto">
-        {/* 头部信息 */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+    <div 
+      className="min-h-screen"
+      style={{ background: 'var(--background-secondary)' }}
+    >
+      {/* 顶部导航 */}
+      <nav className="glass-effect sticky top-0 z-40 border-b" style={{ borderColor: 'var(--separator)' }}>
+        <div className="max-w-6xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-800 mb-2">
-                {user.username} 的主页
-              </h1>
-            </div>
-            <div className="flex items-center gap-4">
-              {/* {currentUser && (
-                <div className="text-sm text-gray-500">
-                  当前用户: {currentUser.username}
+            <div className="flex items-center gap-3">
+              <Link href="/" className="flex items-center gap-2">
+                <div 
+                  className="text-2xl font-light"
+                  style={{ color: 'var(--primary)' }}
+                >
+                  ✦
                 </div>
-              )} */}
-              {/* <Link 
-                href="/" 
-                className="bg-[#a5a6f6] hover:bg-[#7c7cf7] text-white font-semibold rounded-lg px-4 py-2 transition-all"
+                <span 
+                  className="text-xl font-semibold"
+                  style={{ color: 'var(--foreground)' }}
+                >
+                  Nebula
+                </span>
+              </Link>
+            </div>
+            
+            <div className="flex items-center gap-4">
+              <span 
+                className="text-sm font-medium"
+                style={{ color: 'var(--foreground)' }}
               >
-                返回主页
-              </Link> */}
+                {user.username} 的主页
+              </span>
               <Link 
-                href={`/${user.id}/tags`} 
-                className="bg-[#7c7cf7] hover:bg-[#a5a6f6] text-white font-semibold rounded-lg px-4 py-2 transition-all"
+                href={`/${user.id}/tags`}
+                className="button-secondary text-sm py-2 px-4"
               >
-                状态
+                我的标签
+              </Link>
+              <Link 
+                href="/friends"
+                className="button-secondary text-sm py-2 px-4"
+              >
+                好友
               </Link>
             </div>
           </div>
-          
-          {/* 用户专属URL
-          <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-          </div> */}
         </div>
+      </nav>
 
-        {/* Tab切换 */}
-        {/* <div className="flex mb-2 rounded-lg overflow-hidden border border-[#e6e6fa] bg-white shadow-sm max-w-4xl w-full mx-auto">
-          <button
-            className={`flex-1 py-2 text-lg font-semibold transition-all ${mode === 'note' ? 'bg-[#a5a6f6] text-white' : 'bg-white text-[#3a2e6c]'}`}
-            onClick={() => setMode('note')}
+      <div className="max-w-6xl mx-auto px-4 py-8">
+        {/* 输入区域 */}
+        <div className="max-w-2xl mx-auto mb-12">
+          <div 
+            className="card p-6 transition-all duration-300"
+            style={{ background: 'var(--background)' }}
           >
-            写笔记
-          </button>
-          <button
-            className={`flex-1 py-2 text-lg font-semibold transition-all ${mode === 'ai' ? 'bg-[#a5a6f6] text-white' : 'bg-white text-[#3a2e6c]'}`}
-            onClick={() => setMode('ai')}
-          >
-            AI对话
-          </button>
-        </div> */}
-        {/* 输入区 */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-8 max-w-4xl w-full mx-auto backdrop-blur-sm transition-all duration-300 hover:shadow-xl">
-          {/* Toggle按钮：输入区上方 - 整个区域可点击的toggle */}
-          <div className="flex items-center justify-center mb-6">
-            <button
-              className="relative bg-gray-100 rounded-full p-1 flex cursor-pointer hover:bg-gray-200 transition-all duration-300"
-              onClick={() => setMode(mode === 'ai' ? 'note' : 'ai')}
-            >
-              <div 
-                className={`absolute top-1 bottom-1 bg-[#a5a6f6] rounded-full transition-all duration-300 ease-out shadow-md ${mode === 'ai' ? 'left-1 w-[90px]' : 'left-[95px] w-[90px]'}`}
-              />
-              <div
-                className={`relative z-10 px-6 py-2 text-base font-semibold transition-all duration-300 rounded-full ${mode === 'ai' ? 'text-white' : 'text-gray-600'}`}
-              >
-                AI对话
-              </div>
-              <div
-                className={`relative z-10 px-6 py-2 text-base font-semibold transition-all duration-300 rounded-full ${mode === 'note' ? 'text-white' : 'text-gray-600'}`}
-              >
-                写笔记
-              </div>
-            </button>
-          </div>
+                         {/* 模式切换 */}
+             <div className="flex items-center justify-center mb-6">
+               <div 
+                 className="relative flex p-1 rounded-xl cursor-pointer transition-all duration-200 hover:bg-opacity-80"
+                 style={{ background: 'var(--background-secondary)' }}
+                 onClick={() => setMode(mode === 'ai' ? 'note' : 'ai')}
+               >
+                                    <div 
+                     className={`absolute top-1 bottom-1 bg-white rounded-lg transition-all duration-300 ease-out shadow-sm ${
+                       mode === 'ai' ? 'left-1 w-[88px]' : 'left-[93px] w-[88px]'
+                     }`}
+                     style={{ boxShadow: 'var(--shadow-1)' }}
+                   />
+                   <div
+                     className={`relative z-10 px-3 py-2 text-sm font-semibold transition-all duration-300 rounded-lg flex items-center justify-center whitespace-nowrap ${
+                       mode === 'ai' ? 'text-gray-900' : 'text-gray-500'
+                     }`}
+                     style={{ width: '88px' }}
+                   >
+                     AI对话
+                   </div>
+                   <div
+                     className={`relative z-10 px-3 py-2 text-sm font-semibold transition-all duration-300 rounded-lg flex items-center justify-center whitespace-nowrap ${
+                       mode === 'note' ? 'text-gray-900' : 'text-gray-500'
+                     }`}
+                     style={{ width: '88px' }}
+                   >
+                     写笔记
+                   </div>
+               </div>
+             </div>
 
-          {/* 输入框容器 */}
-          <div className="relative">
-            <textarea
-              className="w-full h-32 rounded-xl border-2 border-gray-200 p-4 text-lg text-gray-800 focus:outline-none focus:border-[#a5a6f6] focus:ring-4 focus:ring-[#a5a6f6]/20 resize-none transition-all duration-300 placeholder-gray-400 bg-gray-50 focus:bg-white"
-              placeholder={mode === 'note' ? '写下你的想法...' : '向AI提问或对话...'}
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                  e.preventDefault();
-                  document.getElementById('submit-btn')?.click();
-                }
-              }}
-            />
-            
-            {/* 提交按钮 - 浮动在右下角 */}
-            <button
-              id="submit-btn"
-              className={`absolute bottom-3 right-3 w-12 h-12 rounded-full shadow-lg transition-all duration-300 flex items-center justify-center font-semibold text-white transform hover:scale-105 active:scale-95 ${
-                (adding || chatSending) ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#a5a6f6] hover:bg-[#7c7cf7] hover:shadow-xl'
-              }`}
-              onClick={async () => {
-                if (mode === 'note') {
-                  // 保存笔记到Supabase
-                  if (!input.trim()) return;
-                  setAdding(true);
-                  try {
-                    const { data, error } = await supabase
-                      .from("notes")
-                      .insert([{ user_id: userId, content: input.trim() }])
-                      .select()
-                      .single();
-                    if (!error && data) {
-                      setNotes([data, ...notes]);
+            {/* 输入框 */}
+            <div className="relative">
+              <textarea
+                className="input-field w-full h-32 text-lg py-4 resize-none"
+                placeholder={mode === 'note' ? '写下你的想法...' : '向AI提问或对话...'}
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                    e.preventDefault();
+                    if (mode === 'note') {
+                      handleAddNote();
+                    } else if (input.trim()) {
+                      handleAIChat(input);
                       setInput("");
-                    } else {
-                      console.error('保存笔记失败:', error);
                     }
-                  } catch (error) {
-                    console.error('保存笔记异常:', error);
-                  } finally {
-                    setAdding(false);
                   }
-                } else {
-                  // AI对话逻辑
-                  if (!input.trim()) return;
-                  setChatSending(true);
-                  setChatMessages(msgs => [...msgs, { role: 'user', content: input }]);
-                  
-                  // 保存AI对话内容到Supabase
-                  try {
-                    const { data: noteData, error: noteError } = await supabase
-                      .from("notes")
-                      .insert([{ user_id: userId, content: input.trim() }])
-                      .select()
-                      .single();
-                    
-                    if (!noteError && noteData) {
-                      // 添加到本地状态
-                      setNotes([noteData, ...notes]);
-                    } else {
-                      console.error('保存AI对话到数据库失败:', noteError);
-                    }
-                  } catch (error) {
-                    console.error('保存AI对话失败:', error);
-                  }
-                  
-                  try {
-                    const res = await fetch('/api/ai-chat', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ userId, message: input }),
-                    });
-                    const data = await res.json();
-                    setChatMessages(msgs => [...msgs, { role: 'ai', content: data.reply || 'AI无回复' }]);
+                }}
+              />
+              
+              {/* 提交按钮 */}
+              <button
+                onClick={() => {
+                  if (mode === 'note') {
+                    handleAddNote();
+                  } else if (input.trim()) {
+                    handleAIChat(input);
                     setInput("");
-                  } catch {
-                    setChatMessages(msgs => [...msgs, { role: 'ai', content: 'AI服务异常' }]);
                   }
-                  setChatSending(false);
-                }
-              }}
-              disabled={adding || chatSending}
-            >
-              {(adding || chatSending) ? (
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                </svg>
-              )}
-            </button>
-          </div>
-
-          {/* 快捷键提示
-          <div className="mt-3 text-xs text-gray-400 text-center">
-            {mode === 'note' ? '💡 Cmd/Ctrl + Enter 快速记录' : '💡 Cmd/Ctrl + Enter 快速发送'}
-          </div> */}
-          {/* AI对话历史，仅AI模式下显示 */}
-          {mode === 'ai' && (
-            <div className="w-full mt-6 flex flex-col gap-3">
-              {chatMessages.length > 0 && chatMessages[chatMessages.length-1].role === 'ai' && (
-                <div className="text-left">
-                  <span className="inline-block bg-[#f1f5fb] text-[#222] rounded-lg px-4 py-2 font-semibold">
-                    {chatMessages[chatMessages.length-1].content}
-                  </span>
-                </div>
-              )}
+                }}
+                disabled={adding || chatSending || !input.trim()}
+                className="button-primary absolute bottom-3 right-3 w-12 h-12 rounded-full p-0 flex items-center justify-center disabled:opacity-50"
+              >
+                {(adding || chatSending) ? (
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                  </svg>
+                )}
+              </button>
             </div>
-          )}
+
+            {/* AI对话历史 */}
+            {mode === 'ai' && chatMessages.length > 0 && (
+              <div className="mt-6 space-y-3">
+                {chatMessages.slice(-3).map((msg, i) => (
+                  <div key={i} className={msg.role === 'user' ? 'text-right' : 'text-left'}>
+                    <span 
+                      className={`inline-block rounded-xl px-4 py-2 ${
+                        msg.role === 'user' 
+                          ? 'bg-blue-500 text-white' 
+                          : 'bg-gray-100 text-gray-800'
+                      }`}
+                      style={{
+                        background: msg.role === 'user' ? 'var(--primary)' : 'var(--background-secondary)',
+                        color: msg.role === 'user' ? 'white' : 'var(--foreground)'
+                      }}
+                    >
+                      {msg.content}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* 快捷键提示 */}
+            <div 
+              className="mt-3 text-xs text-center"
+              style={{ color: 'var(--foreground-tertiary)' }}
+            >
+              💡 按 ⌘/Ctrl + Enter 快速{mode === 'note' ? '记录' : '发送'}
+            </div>
+          </div>
         </div>
 
-        {/* 极简无分区便签墙 */}
-        <div className="min-h-[60vh] max-w-4xl w-full flex flex-wrap gap-6 justify-center items-start mb-8">
+        {/* 便签墙 */}
+        <div className="min-h-[60vh] flex flex-wrap gap-6 justify-center items-start">
           {notes.length === 0 ? (
-            <div className="text-center text-gray-400 w-full">暂无笔记</div>
+            <div 
+              className="text-center w-full py-20"
+              style={{ color: 'var(--foreground-tertiary)' }}
+            >
+              <div className="text-lg">还没有笔记哦</div>
+              <div className="text-sm mt-2">开始记录你的想法吧</div>
+            </div>
           ) : (
             notes.map((note, i) => (
-              <NoteSticker key={note.id} content={note.content} index={i} />
+              <NoteCard 
+                key={note.id} 
+                content={note.content} 
+                index={i}
+              />
             ))
           )}
         </div>
-
-        {/* AI聊天按钮 - 只有自己的页面才显示
-        {isOwnPage && (
-          <div className="text-center">
-            <button
-              ref={chatBtnRef}
-              className="w-40 h-16 rounded-full bg-[#e5e4fa] text-black text-xl shadow border border-[#d1d0e7] hover:bg-[#d1d0e7] transition-all"
-              onClick={() => setShowChat(true)}
-            >
-              chat
-            </button>
-          </div>
-        )} */}
-
-        {/* AI聊天模态框 */}
-        <ChatModal
-          open={showChat}
-          onClose={() => setShowChat(false)}
-          messages={chatMessages}
-          onSend={async msg => {
-            setChatMessages([...chatMessages, { role: 'user', content: msg }]);
-            setChatSending(true);
-            try {
-              const res = await fetch('/api/ai-chat', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: user.id, message: msg }),
-              });
-              const data = await res.json();
-              setChatMessages(current => [...current, { role: 'ai', content: data.reply || 'AI 没有返回内容' }]);
-            } catch {
-              setChatMessages(current => [...current, { role: 'ai', content: 'AI 回复失败，请重试' }]);
-            }
-            setChatSending(false);
-          }}
-          sending={chatSending}
-          anchorRef={chatBtnRef}
-        />
       </div>
+
+      {/* AI聊天模态框 */}
+      <ChatModal
+        open={showChat}
+        onClose={() => setShowChat(false)}
+        messages={chatMessages}
+        onSend={handleAIChat}
+        sending={chatSending}
+        anchorRef={chatBtnRef}
+      />
     </div>
   );
 } 

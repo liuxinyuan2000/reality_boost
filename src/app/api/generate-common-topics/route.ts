@@ -11,7 +11,24 @@ async function fetchNearbyPOIs(location: Location | null): Promise<Poi[]> {
   const url = `https://restapi.amap.com/v3/place/around?key=${AMAP_KEY}&location=${locationStr}&radius=2000&types=${types}&offset=5`;
   console.log('[DEBUG] AMAP fetch url:', url);
   try {
-    const resp = await fetch(url);
+    // 添加超时控制
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒超时
+    
+    const resp = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Reality-Note/1.0'
+      }
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!resp.ok) {
+      console.error('[AMAP] HTTP错误:', resp.status, resp.statusText);
+      return [];
+    }
+    
     const amapData = await resp.json();
     console.log('[DEBUG] AMAP raw response:', JSON.stringify(amapData));
     if (amapData.status === '1' && Array.isArray(amapData.pois)) {
@@ -22,7 +39,11 @@ async function fetchNearbyPOIs(location: Location | null): Promise<Poi[]> {
       }));
     }
   } catch (e) {
-    console.error('[AMAP] 获取地标失败:', e);
+    if (e instanceof Error && e.name === 'AbortError') {
+      console.error('[AMAP] 请求超时');
+    } else {
+      console.error('[AMAP] 获取地标失败:', e);
+    }
   }
   return [];
 }
