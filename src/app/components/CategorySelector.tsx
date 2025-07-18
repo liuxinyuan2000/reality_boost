@@ -89,7 +89,7 @@ export default function CategorySelector({
           className="text-sm font-medium mb-2 block"
           style={{ color: 'var(--foreground)' }}
         >
-          选择分类
+          选择文件夹
         </label>
         
         <div
@@ -109,8 +109,7 @@ export default function CategorySelector({
                 <>
                   <span className="text-lg">{selectedCategory.icon}</span>
                   <span 
-                    className="font-medium"
-                    style={{ color: selectedCategory.color }}
+                    className="font-medium text-white"
                   >
                     {selectedCategory.name}
                   </span>
@@ -123,8 +122,8 @@ export default function CategorySelector({
               ) : (
                 <>
                   <span className="text-lg">📝</span>
-                  <span style={{ color: 'var(--foreground-secondary)' }}>
-                    选择分类
+                  <span className="text-white">
+                    选择文件夹
                   </span>
                 </>
               )}
@@ -170,7 +169,7 @@ export default function CategorySelector({
                 }}
               >
                 <span className="text-lg">📝</span>
-                <span style={{ color: 'var(--foreground-secondary)' }}>无分类</span>
+                <span className="text-white">临时对话</span>
               </div>
 
               {/* 分类列表 */}
@@ -180,7 +179,7 @@ export default function CategorySelector({
                 </div>
               ) : categories.length === 0 ? (
                 <div className="px-4 py-3 text-center" style={{ color: 'var(--foreground-secondary)' }}>
-                  暂无分类
+                  临时对话
                 </div>
               ) : (
                 categories.map((category) => (
@@ -205,8 +204,7 @@ export default function CategorySelector({
                   >
                     <span className="text-lg">{category.icon}</span>
                     <span 
-                      className="font-medium flex-1"
-                      style={{ color: category.color }}
+                      className="font-medium flex-1 text-white"
                     >
                       {category.name}
                     </span>
@@ -240,7 +238,7 @@ export default function CategorySelector({
                     }}
                   >
                     <span className="text-lg">➕</span>
-                    <span style={{ color: 'var(--primary)' }}>创建新分类</span>
+                    <span style={{ color: 'var(--primary)' }}>创建新文件夹</span>
                   </div>
                 </>
               )}
@@ -259,7 +257,7 @@ export default function CategorySelector({
             私有笔记
           </span>
           <span className="text-xs" style={{ color: 'var(--foreground-tertiary)' }}>
-            只有自己可见
+            知识库不可被朋友调用
           </span>
         </div>
         

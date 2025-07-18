@@ -257,7 +257,7 @@ export default function ChatSessionManagement({
 
                 {/* 分类选择 */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">选择分类</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">选择文件夹</label>
                   <select
                     value={newSession.category_id || ''}
                     onChange={(e) => setNewSession({ 
@@ -266,7 +266,7 @@ export default function ChatSessionManagement({
                     })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
-                    <option value="">无分类</option>
+                    <option value="">无文件夹</option>
                     {categories.map((category) => (
                       <option key={category.id} value={category.id}>
                         {category.icon} {category.name}
@@ -355,7 +355,7 @@ export default function ChatSessionManagement({
                         )}
                         <div className="text-xs text-gray-500 mt-1 flex items-center gap-4">
                           {session.categories && (
-                            <span>分类：{session.categories.name}</span>
+                            <span>文件夹：{session.categories.name}</span>
                           )}
                           <span>最后使用：{new Date(session.last_message_at).toLocaleString()}</span>
                         </div>
@@ -443,7 +443,7 @@ function SessionEditForm({
 
       {/* 分类选择 */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">选择分类</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">选择文件夹</label>
         <select
           value={editData.category_id || ''}
           onChange={(e) => setEditData({ 
@@ -452,7 +452,7 @@ function SessionEditForm({
           })}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         >
-          <option value="">无分类</option>
+          <option value="">无文件夹</option>
           {categories.map((category) => (
             <option key={category.id} value={category.id}>
               {category.icon} {category.name}

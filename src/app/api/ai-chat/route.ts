@@ -109,8 +109,36 @@ async function callKimiAPI(prompt: string) {
   }
 }
 
+// 处理@提及的文件夹引用
+async function processMentionedFolders(mentions: any[], userId: string) {
+  if (!mentions || mentions.length === 0) {
+    return '';
+  }
+
+  const contextParts = [];
+  
+  for (const mention of mentions) {
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/folder-content?folderId=${mention.folderId}&requesterId=${userId}`
+      );
+      
+      if (response.ok) {
+        const data = await response.json();
+        contextParts.push(
+          `\n\n## 引用：${data.folder.owner.username} 的「${data.folder.name}」文件夹内容：\n${data.contextContent}`
+        );
+      }
+    } catch (error) {
+      console.error('获取文件夹内容失败:', error);
+    }
+  }
+  
+  return contextParts.join('');
+}
+
 export async function POST(req: NextRequest) {
-  const { userId, message, location } = await req.json();
+  const { userId, message, location, mentions } = await req.json();
   if (!userId || !message) {
     return NextResponse.json({ error: '缺少 userId 或 message' }, { status: 400 });
   }
@@ -118,9 +146,40 @@ export async function POST(req: NextRequest) {
   try {
     // 获取相关笔记
     const notesText = await getRelevantNotes(userId, message);
+    
+    // 处理@提及的文件夹
+    const mentionedContext = await processMentionedFolders(mentions || [], userId);
 
-    // 改进的 prompt，更明确地指导 AI 基于笔记回答
-    const prompt = `基于用户的历史笔记内容，回答用户的问题。\n\n用户的历史笔记：\n${notesText || '暂无历史笔记'}\n\n用户当前问题：${message}\n\n请基于用户的历史笔记内容来回答，体现对用户过去记录的理解。回答要自然、有针对性，控制在150字以内。`;
+    // 构建更丰富的上下文
+    let contextParts = [];
+    
+    if (notesText) {
+      contextParts.push(`用户的历史笔记：\n${notesText}`);
+    }
+    
+    if (mentionedContext) {
+      contextParts.push(mentionedContext);
+    }
+    
+    const context = contextParts.join('\n\n');
+
+    // 改进的 prompt，支持好友文件夹引用
+    const prompt = mentions && mentions.length > 0 
+      ? `用户在对话中引用了好友的文件夹内容作为参考。请基于用户自己的历史笔记和引用的好友文件夹内容来回答问题。
+
+${context || '暂无参考内容'}
+
+用户当前问题：${message}
+
+请综合考虑用户自己的历史记录和引用的好友内容来回答，要自然地体现对这些信息的理解和关联。回答控制在200字以内。`
+      : `基于用户的历史笔记内容，回答用户的问题。
+
+${context || '暂无历史笔记'}
+
+用户当前问题：${message}
+
+请基于用户的历史笔记内容来回答，体现对用户过去记录的理解。回答要自然、有针对性，控制在150字以内。`;
+    
     console.log('[AI-CHAT] 最终发给AI的prompt:', prompt);
 
     const startTime = Date.now();
@@ -142,7 +201,9 @@ export async function POST(req: NextRequest) {
       apiUsed,
       responseTime,
       fallback: apiUsed === 'Local Fallback',
-      notesCount: notesText ? notesText.split('\n').length : 0
+      notesCount: notesText ? notesText.split('\n').length : 0,
+      mentionsCount: mentions ? mentions.length : 0,
+      hasMentions: !!(mentions && mentions.length > 0)
     });
 
   } catch (error) {

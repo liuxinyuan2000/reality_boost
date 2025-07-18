@@ -10,6 +10,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import CategorySelector from '../components/CategorySelector';
 import CategoryManagement from '../components/CategoryManagement';
 import ChatSessionManagement from '../components/ChatSessionManagement';
+import EnhancedChatInput from '../components/EnhancedChatInput';
 
 interface Note {
   id: string;
@@ -29,13 +30,14 @@ export interface Category {
 }
 
 // AI 对话模态框组件
-function ChatModal({ open, onClose, messages, onSend, sending, anchorRef }: {
+function ChatModal({ open, onClose, messages, onSend, sending, anchorRef, currentUserId }: {
   open: boolean;
   onClose: () => void;
   messages: { role: 'user' | 'ai', content: string }[];
   onSend: (msg: string) => void;
   sending: boolean;
   anchorRef: React.RefObject<HTMLButtonElement | null>;
+  currentUserId: string;
 }) {
   const [input, setInput] = useState("");
   const modalRef = useRef<HTMLDivElement>(null);
@@ -109,32 +111,20 @@ function ChatModal({ open, onClose, messages, onSend, sending, anchorRef }: {
           ))}
         </div>
         
-        <div className="flex items-center gap-2 pt-2">
-          <input
-            className="input-field flex-1 text-base"
+        <div className="pt-2">
+          <EnhancedChatInput
             value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => { 
-              if (e.key === 'Enter' && input.trim() && !sending) { 
-                onSend(input); 
-                setInput(""); 
-              } 
+            onChange={setInput}
+            onSend={(message) => {
+              if (message.trim() && !sending) {
+                onSend(message);
+                setInput("");
+              }
             }}
-            placeholder="输入你的问题..."
+            placeholder="输入你的问题，使用@引用好友文件夹..."
             disabled={sending}
+            currentUserId={currentUserId}
           />
-          <button
-            className="button-secondary px-4 py-2 text-base disabled:opacity-60"
-            onClick={() => { 
-              if (input.trim()) { 
-                onSend(input); 
-                setInput(""); 
-              } 
-            }}
-            disabled={!input.trim() || sending}
-          >
-            发送
-          </button>
         </div>
       </div>
     </div>
@@ -173,9 +163,9 @@ function NoteCard({ content, index, onEdit, onDelete }: {
             fontFamily: 'var(--font-sans)',
             whiteSpace: 'pre-wrap',
             wordBreak: 'break-word'
-          }}
-        >
-          {content}
+      }}
+    >
+      {content}
         </div>
         
         {/* 操作按钮 - 只在悬停时显示 */}
@@ -307,8 +297,8 @@ export default function UserPage() {
         console.error('获取用户失败:', error);
         setShowAuth(true);
       }
-      setLoading(false);
-    }
+        setLoading(false);
+      }
 
     fetchUser();
   }, [userId]);
@@ -386,7 +376,7 @@ export default function UserPage() {
     if (!user || !currentUser) return;
 
     async function fetchNotes() {
-      const { data, error } = await supabase
+        const { data, error } = await supabase
         .from('notes')
         .select(`
           *,
@@ -400,11 +390,11 @@ export default function UserPage() {
         `)
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
-
-      if (!error && data) {
-        setNotes(data);
+        
+        if (!error && data) {
+          setNotes(data);
+        }
       }
-    }
 
     fetchNotes();
   }, [user, currentUser, userId]);
@@ -461,32 +451,32 @@ export default function UserPage() {
     async function fetchCommonTopics() {
       if (isRequestingTopics.current) return;
       
-      isRequestingTopics.current = true;
+    isRequestingTopics.current = true;
       hasRequestedTopics.current = true;
-      setLoadingTopics(true);
+    setLoadingTopics(true);
 
-      try {
+    try {
         if (!currentUser || !user) return;
         
-        const response = await fetch('/api/generate-common-topics', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
+      const response = await fetch('/api/generate-common-topics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
             userId1: currentUser.id, 
             userId2: user.id,
             location: userLocation 
-          }),
-        });
+        }),
+      });
 
-        const data = await response.json();
+      const data = await response.json();
         if (data.success && data.topics) {
           setCommonTopics(data.topics);
-        }
-      } catch (error) {
+      }
+    } catch (error) {
         console.error('获取共同话题失败:', error);
-      } finally {
-        setLoadingTopics(false);
-        isRequestingTopics.current = false;
+    } finally {
+      setLoadingTopics(false);
+      isRequestingTopics.current = false;
       }
     }
 
@@ -500,7 +490,7 @@ export default function UserPage() {
 
     setAdding(true);
     try {
-      const { data, error } = await supabase
+    const { data, error } = await supabase
         .from('notes')
         .insert([{
           user_id: currentUser.id,
@@ -517,20 +507,20 @@ export default function UserPage() {
             is_private
           )
         `)
-        .single();
+      .single();
 
-      if (!error && data) {
-        setNotes([data, ...notes]);
-        setInput("");
-      }
+    if (!error && data) {
+      setNotes([data, ...notes]);
+      setInput("");
+    }
     } catch (error) {
       console.error('添加笔记失败:', error);
     }
     setAdding(false);
   };
 
-  // AI 对话
-  const handleAIChat = async (message: string) => {
+  // AI 对话 - 支持文件夹引用
+  const handleAIChat = async (message: string, mentions: any[] = []) => {
     if (!currentUser || !user) return;
 
     const categoryId = selectedCategoryId || 'default';
@@ -554,7 +544,8 @@ export default function UserPage() {
           userId: currentUser.id, 
           message,
           categoryId: selectedCategoryId,
-          messageHistory: currentMessages.slice(-10) // 发送最近10条消息作为上下文
+          messageHistory: currentMessages.slice(-10), // 发送最近10条消息作为上下文
+          mentions: mentions // 添加文件夹引用
         }),
       });
       const data = await res.json();
@@ -609,8 +600,8 @@ export default function UserPage() {
           .eq('target_user_id', user.id);
         
         setLikeStatus(prev => ({ ...prev, count: count || 0 }));
-      }
-    } catch (error) {
+        }
+      } catch (error) {
       console.error('添加好友失败:', error);
     }
     setFriendsLoading(false);
@@ -724,7 +715,7 @@ export default function UserPage() {
         style={{ background: 'var(--background-secondary)' }}
       >
         <div className="max-w-md mx-auto text-center mb-8">
-          <div className="text-4xl mb-4">🎯</div>
+            <div className="text-4xl mb-4">🎯</div>
           <h1 
             className="text-2xl font-bold mb-2"
             style={{ color: 'var(--foreground)' }}
@@ -745,11 +736,11 @@ export default function UserPage() {
             }}
           >
             <div className="text-sm">
-              <strong>专属链接:</strong> {typeof window !== 'undefined' ? `${window.location.origin}/${userId}` : `/${userId}`}
+                <strong>专属链接:</strong> {typeof window !== 'undefined' ? `${window.location.origin}/${userId}` : `/${userId}`}
+              </div>
             </div>
           </div>
-        </div>
-        <AuthForm onAuth={handleAuthSuccess} customUserId={userId} />
+          <AuthForm onAuth={handleAuthSuccess} customUserId={userId} />
       </div>
     );
   }
@@ -795,7 +786,7 @@ export default function UserPage() {
               style={{ color: 'var(--primary)' }}
             >
               ✦ 共同话题
-            </h2>
+          </h2>
             
             {currentUser && user && (
               <div className="flex items-center justify-center gap-4 mb-6">
@@ -935,7 +926,7 @@ export default function UserPage() {
                   style={{ color: 'var(--primary)' }}
                 >
                   ✦
-                </div>
+            </div>
                 <span 
                   className="text-xl font-semibold"
                   style={{ color: 'var(--foreground)' }}
@@ -943,7 +934,7 @@ export default function UserPage() {
                   Nebula
                 </span>
               </Link>
-            </div>
+                </div>
             
             <div className="flex items-center gap-4">
               <span 
@@ -953,10 +944,10 @@ export default function UserPage() {
                 {user.username} 的主页
               </span>
               <Link 
-                href={`/${user.id}/tags`}
+                href={`/${user.id}/tags`} 
                 className="button-secondary text-sm py-2 px-4"
               >
-                我的标签
+                我的状态
               </Link>
               <Link 
                 href="/friends"
@@ -977,36 +968,36 @@ export default function UserPage() {
             style={{ background: 'var(--background)' }}
           >
                          {/* 模式切换 */}
-             <div className="flex items-center justify-center mb-6">
+          <div className="flex items-center justify-center mb-6">
                <div 
                  className="relative flex p-1 rounded-xl cursor-pointer transition-all duration-200 hover:bg-opacity-80"
                  style={{ background: 'var(--background-secondary)' }}
-                 onClick={() => setMode(mode === 'ai' ? 'note' : 'ai')}
-               >
-                 <div 
+              onClick={() => setMode(mode === 'ai' ? 'note' : 'ai')}
+            >
+              <div 
                    className={`absolute top-1 bottom-1 bg-white rounded-lg transition-all duration-300 ease-out shadow-sm ${
                      mode === 'ai' ? 'left-1 w-[88px]' : 'left-[93px] w-[88px]'
                    }`}
                    style={{ boxShadow: 'var(--shadow-1)' }}
-                 />
-                 <div
+              />
+              <div
                    className={`relative z-10 px-3 py-2 text-sm font-semibold transition-all duration-300 rounded-lg flex items-center justify-center whitespace-nowrap ${
                      mode === 'ai' ? 'text-gray-900' : 'text-gray-500'
                    }`}
                    style={{ width: '88px' }}
-                 >
-                   AI对话
-                 </div>
-                 <div
+              >
+                AI对话
+              </div>
+              <div
                    className={`relative z-10 px-3 py-2 text-sm font-semibold transition-all duration-300 rounded-lg flex items-center justify-center whitespace-nowrap ${
                      mode === 'note' ? 'text-gray-900' : 'text-gray-500'
                    }`}
                    style={{ width: '88px' }}
-                 >
-                   写笔记
-                 </div>
+              >
+                写笔记
+              </div>
                </div>
-             </div>
+          </div>
 
              {/* 分类选择器 */}
              <div className="mb-4">
@@ -1021,54 +1012,65 @@ export default function UserPage() {
              </div>
 
             {/* 输入框 */}
-            <div className="relative">
-              <textarea
-                className="input-field w-full h-32 text-lg py-4 resize-none"
-                placeholder={mode === 'note' ? '写下你的想法...' : '向AI提问或对话...'}
+            {mode === 'ai' ? (
+              <EnhancedChatInput
                 value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                    e.preventDefault();
-                    if (mode === 'note') {
-                      handleAddNote();
-                    } else if (input.trim()) {
-                      handleAIChat(input);
-                      setInput("");
-                    }
-                  }
+                onChange={setInput}
+                onSend={(message, mentions) => {
+                  handleAIChat(message, mentions);
+                  setInput("");
                 }}
+                placeholder="向AI提问或对话..."
+                disabled={chatSending}
+                currentUserId={currentUser?.id || ''}
               />
-              
-              {/* 提交按钮 */}
-              <button
-                onClick={() => {
-                  if (mode === 'note') {
-                    handleAddNote();
-                  } else if (input.trim()) {
-                    handleAIChat(input);
-                    setInput("");
-                  }
-                }}
-                disabled={adding || chatSending || !input.trim()}
-                className="button-primary absolute bottom-3 right-3 w-12 h-12 rounded-full p-0 flex items-center justify-center disabled:opacity-50"
-              >
-                {(adding || chatSending) ? (
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                  </svg>
-                )}
-              </button>
-            </div>
+            ) : (
+              <div className="relative">
+                <textarea
+                  className="input-field w-full h-32 text-lg py-4 resize-none"
+                  placeholder="写下你的想法..."
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                      e.preventDefault();
+                      handleAddNote();
+                    }
+                  }}
+                />
+                
+                {/* 提交按钮 */}
+                <button
+                  onClick={handleAddNote}
+                  disabled={adding || !input.trim()}
+                  className="button-primary absolute right-3 w-12 h-12 rounded-full p-0 flex items-center justify-center disabled:opacity-50"
+                  style={{ bottom: '36px' }}
+                >
+                  {adding ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                  )}
+                </button>
+                
+                {/* 快捷键提示 */}
+                <div 
+                  className="mt-2 text-xs text-center"
+                  style={{ color: 'var(--foreground-tertiary)' }}
+                >
+                  💡 按 ⌘/Ctrl + Enter 快速记录
+                </div>
+              </div>
+            )}
 
             {/* AI对话历史 */}
             {mode === 'ai' && chatMessages.length > 0 && (
               <div className="mt-6 space-y-3">
                 <div className="text-xs text-center mb-2" style={{ color: 'var(--foreground-tertiary)' }}>
                   {selectedCategoryId 
-                    ? `${categories.find(c => c.id === selectedCategoryId)?.name || '未知分类'} 的对话历史`
+                    ? `${categories.find(c => c.id === selectedCategoryId)?.name || '未知文件夹'} 的对话历史`
                     : '通用对话历史'
                   }
                 </div>
@@ -1091,14 +1093,6 @@ export default function UserPage() {
                 ))}
               </div>
             )}
-
-            {/* 快捷键提示 */}
-            <div 
-              className="mt-3 text-xs text-center"
-              style={{ color: 'var(--foreground-tertiary)' }}
-            >
-              💡 按 ⌘/Ctrl + Enter 快速{mode === 'note' ? '记录' : '发送'}
-            </div>
           </div>
         </div>
 
@@ -1115,7 +1109,7 @@ export default function UserPage() {
                 style={{ color: 'var(--foreground-tertiary)' }}
               >
                 <div className="text-lg">
-                  {selectedCategoryId ? '该分类下还没有笔记' : '还没有笔记哦'}
+                  {selectedCategoryId ? '该文件夹下还没有笔记' : '还没有笔记哦'}
                 </div>
                 <div className="text-sm mt-2">开始记录你的想法吧</div>
               </div>
@@ -1130,17 +1124,18 @@ export default function UserPage() {
             );
           })()}
         </div>
-      </div>
+          </div>
 
-      {/* AI聊天模态框 */}
-      <ChatModal
-        open={showChat}
-        onClose={() => setShowChat(false)}
-        messages={chatMessages}
-        onSend={handleAIChat}
-        sending={chatSending}
-        anchorRef={chatBtnRef}
-      />
+        {/* AI聊天模态框 */}
+        <ChatModal
+          open={showChat}
+          onClose={() => setShowChat(false)}
+          messages={chatMessages}
+          onSend={handleAIChat}
+          sending={chatSending}
+          anchorRef={chatBtnRef}
+          currentUserId={userId}
+        />
 
       {/* 分类管理模态框 */}
       <CategoryManagement

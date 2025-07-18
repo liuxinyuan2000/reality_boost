@@ -20,15 +20,15 @@ export default function AuthForm({ onAuth, customUserId }: AuthFormProps) {
     e.preventDefault();
     setLoading(true);
     setError("");
-
+    
     try {
-      if (isLogin) {
+    if (isLogin) {
         // 登录逻辑
-        const { data, error } = await supabase
-          .from("users")
-          .select("*")
-          .eq("username", username)
-          .single();
+      const { data, error } = await supabase
+        .from("users")
+        .select("*")
+        .eq("username", username)
+        .single();
 
         if (error || !data) {
           throw new Error("用户名或密码错误");
@@ -64,8 +64,8 @@ export default function AuthForm({ onAuth, customUserId }: AuthFormProps) {
 
         // 保存到localStorage
         localStorage.setItem("currentUser", JSON.stringify(data));
-        onAuth(data);
-      }
+          onAuth(data);
+        }
     } catch (err: any) {
       setError(err.message || "操作失败，请重试");
     } finally {
@@ -113,7 +113,7 @@ export default function AuthForm({ onAuth, customUserId }: AuthFormProps) {
       {/* 表单 */}
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* 自定义用户ID提示 */}
-        {customUserId && !isLogin && (
+      {customUserId && !isLogin && (
           <div 
             className="p-4 rounded-xl animate-fade-in"
             style={{ 
@@ -127,9 +127,9 @@ export default function AuthForm({ onAuth, customUserId }: AuthFormProps) {
                 <div className="font-semibold text-sm">专属链接注册</div>
                 <div className="text-sm opacity-90">ID: {customUserId}</div>
               </div>
-            </div>
           </div>
-        )}
+        </div>
+      )}
 
         {/* 用户名输入 */}
         <div className="space-y-2">
@@ -139,15 +139,15 @@ export default function AuthForm({ onAuth, customUserId }: AuthFormProps) {
           >
             用户名
           </label>
-          <input
-            type="text"
+      <input
+        type="text"
             className="input-field w-full text-lg py-3"
             placeholder="输入你的用户名"
-            value={username}
-            onChange={e => setUsername(e.target.value)}
-            required
+        value={username}
+        onChange={e => setUsername(e.target.value)}
+        required
             autoComplete="username"
-          />
+      />
         </div>
 
         {/* 密码输入 */}
@@ -158,13 +158,13 @@ export default function AuthForm({ onAuth, customUserId }: AuthFormProps) {
           >
             密码
           </label>
-          <input
-            type="password"
+      <input
+        type="password"
             className="input-field w-full text-lg py-3"
             placeholder="输入你的密码"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            required
+        value={password}
+        onChange={e => setPassword(e.target.value)}
+        required
             autoComplete={isLogin ? "current-password" : "new-password"}
           />
         </div>
@@ -186,11 +186,11 @@ export default function AuthForm({ onAuth, customUserId }: AuthFormProps) {
         )}
 
         {/* 提交按钮 */}
-        <button
-          type="submit"
+      <button
+        type="submit"
           className="button-primary w-full text-lg py-3 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
           disabled={loading || !username.trim() || !password.trim()}
-        >
+      >
           {loading ? (
             <div className="flex items-center justify-center gap-3">
               <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -215,16 +215,16 @@ export default function AuthForm({ onAuth, customUserId }: AuthFormProps) {
               onClick={() => setIsLogin(!isLogin)}
             >
               {isLogin ? "立即注册" : "立即登录"}
-            </button>
+      </button>
           </p>
           {!isLogin && (
             <p className="text-xs leading-relaxed">
               注册后你将获得专属的个人页面，<br />
               可以记录笔记、生成 AI 标签、与朋友互动
             </p>
-          )}
-        </div>
-      </form>
+        )}
+      </div>
+    </form>
     </div>
   );
 } 

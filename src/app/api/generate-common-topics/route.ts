@@ -42,7 +42,7 @@ async function fetchNearbyPOIs(location: Location | null): Promise<Poi[]> {
     if (e instanceof Error && e.name === 'AbortError') {
       console.error('[AMAP] 请求超时');
     } else {
-      console.error('[AMAP] 获取地标失败:', e);
+    console.error('[AMAP] 获取地标失败:', e);
     }
   }
   return [];
@@ -335,15 +335,15 @@ ${targetNotesText || '暂无笔记'}`;
                 }
               ];
             } else {
-              topics = [
-                {
-                  title: "笔记分享",
-                  insight: "你们都在用Reality Note记录生活，说明都很重视自我表达。",
-                  suggestion: "可以互相分享一条最近的笔记，聊聊各自的记录习惯。",
-                  source: "你们都在用同一个笔记应用"
-                }
-              ];
-            }
+            topics = [
+              {
+                title: "笔记分享",
+                insight: "你们都在用Reality Note记录生活，说明都很重视自我表达。",
+                suggestion: "可以互相分享一条最近的笔记，聊聊各自的记录习惯。",
+                source: "你们都在用同一个笔记应用"
+              }
+            ];
+          }
           }
         } else {
           // 根据情况提供不同的默认话题
@@ -365,15 +365,15 @@ ${targetNotesText || '暂无笔记'}`;
                 source: "新用户很适合结伴体验"
               }
             ];
-          } else {
-            topics = [
-              {
-                title: "笔记分享",
-                insight: "你们都在用Reality Note记录生活，说明都很重视自我表达。",
-                suggestion: "可以互相分享一条最近的笔记，聊聊各自的记录习惯。",
-                source: "你们都在用同一个笔记应用"
-              }
-            ];
+        } else {
+          topics = [
+            {
+              title: "笔记分享",
+              insight: "你们都在用Reality Note记录生活，说明都很重视自我表达。",
+              suggestion: "可以互相分享一条最近的笔记，聊聊各自的记录习惯。",
+              source: "你们都在用同一个笔记应用"
+            }
+          ];
           }
         }
       }

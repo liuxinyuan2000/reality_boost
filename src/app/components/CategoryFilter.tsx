@@ -85,7 +85,7 @@ export default function CategoryFilter({
             <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
             </svg>
-            <span className="text-sm text-gray-600">全部分类</span>
+                            <span className="text-sm text-gray-600">全部文件夹</span>
           </>
         )}
         <svg 
@@ -122,7 +122,7 @@ export default function CategoryFilter({
                 </svg>
               </div>
               <div>
-                <div className="font-medium">全部分类</div>
+                <div className="font-medium">全部文件夹</div>
                 <div className="text-xs text-gray-500">显示所有笔记</div>
               </div>
             </button>
@@ -153,9 +153,9 @@ export default function CategoryFilter({
                           </svg>
                         )}
                       </div>
-                      <div className="text-xs text-gray-500">
-                        {category.is_private ? '私密分类' : '公开分类'}
-                      </div>
+                                              <div className="text-xs text-gray-500">
+                          {category.is_private ? '私密文件夹' : '公开文件夹'}
+                        </div>
                     </div>
                   </button>
                 ))}
@@ -168,7 +168,7 @@ export default function CategoryFilter({
                 <svg className="w-8 h-8 mx-auto mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                 </svg>
-                <p className="text-sm">暂无分类</p>
+                <p className="text-sm">临时对话</p>
               </div>
             )}
           </div>

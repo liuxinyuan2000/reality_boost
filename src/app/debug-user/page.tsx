@@ -63,12 +63,12 @@ export default function DebugUserPage() {
           )}
 
           <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded">
-            <h4 className="font-semibold text-yellow-800 mb-2">解决分类创建问题:</h4>
+            <h4 className="font-semibold text-yellow-800 mb-2">解决文件夹创建问题:</h4>
             <ol className="text-sm text-yellow-700 space-y-1">
               <li>1. 点击"清除所有用户数据"</li>
               <li>2. 返回主页</li>
               <li>3. 重新注册或登录</li>
-              <li>4. 尝试创建分类</li>
+                              <li>4. 尝试创建文件夹</li>
             </ol>
           </div>
         </div>

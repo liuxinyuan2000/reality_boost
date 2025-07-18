@@ -156,20 +156,20 @@ export default function UserTagsPage() {
   useEffect(() => {
     if (!hasAccess || !currentUser) return;
     
-    async function fetchTags() {
-      setLoading(true);
+      async function fetchTags() {
+        setLoading(true);
       const startTime = Date.now();
-      try {
-        const res = await fetch(`/api/generate-tags`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+        try {
+          const res = await fetch(`/api/generate-tags`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ userId }),
-        });
-        const data = await res.json();
-        setTags(data.tags || []);
-      } catch {
-        setTags([]);
-      }
+          });
+          const data = await res.json();
+          setTags(data.tags || []);
+        } catch {
+          setTags([]);
+        }
       // 智能延迟：只有在请求很快完成时才添加最小延迟以展示动画
       const elapsedTime = Date.now() - startTime;
       const minimumLoadingTime = 400; // 进一步减少到400ms
@@ -216,7 +216,7 @@ export default function UserTagsPage() {
     if (elapsedTime < minimumLoadingTime) {
       setTimeout(() => setLoading(false), minimumLoadingTime - elapsedTime);
     } else {
-      setLoading(false);
+    setLoading(false);
     }
   };
 
@@ -312,7 +312,7 @@ export default function UserTagsPage() {
           <LoadingPoster />
         ) : (
           <div className="animate-fade-in" style={{ animationDelay: '0.2s' }}>
-            <DeconstructPoster tags={tags.map(t => typeof t === 'string' ? t : t.text)} />
+          <DeconstructPoster tags={tags.map(t => typeof t === 'string' ? t : t.text)} />
           </div>
         )}
       </div>
@@ -321,9 +321,9 @@ export default function UserTagsPage() {
       <div className="flex flex-wrap gap-4 justify-center animate-fade-in" style={{ animationDelay: '0.4s' }}>
         {/* 只有本人才能重新生成 */}
         {currentUser && currentUser.id === userId && (
-          <button
-            onClick={handleRegenerate}
-            disabled={loading}
+        <button
+          onClick={handleRegenerate}
+          disabled={loading}
             className="button-secondary px-8 py-3 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? (
@@ -347,7 +347,7 @@ export default function UserTagsPage() {
             className="button-primary px-8 py-3 text-lg"
           >
             保存图片
-          </button>
+        </button>
         )}
         
         {/* 返回按钮 */}

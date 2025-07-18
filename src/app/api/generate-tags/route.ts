@@ -200,20 +200,20 @@ function extractTagsFromText(text: string): string[] {
   
   // 尝试匹配方括号中的内容 (单行格式)
   if (tags.length === 0) {
-    const bracketMatch = text.match(/\[(.*?)\]/);
-    if (bracketMatch) {
-      const content = bracketMatch[1];
-      const items = content.split(',').map(item => item.trim().replace(/['"]/g, ''));
-      tags.push(...items.filter(item => item.length > 0 && item.length <= 8));
+  const bracketMatch = text.match(/\[(.*?)\]/);
+  if (bracketMatch) {
+    const content = bracketMatch[1];
+    const items = content.split(',').map(item => item.trim().replace(/['"]/g, ''));
+    tags.push(...items.filter(item => item.length > 0 && item.length <= 8));
     }
   }
   
   // 尝试匹配引号中的内容
   if (tags.length === 0) {
-    const quoteMatches = text.match(/"([^"]+)"/g);
-    if (quoteMatches) {
-      const items = quoteMatches.map(match => match.replace(/"/g, ''));
-      tags.push(...items.filter(item => item.length > 0 && item.length <= 8));
+  const quoteMatches = text.match(/"([^"]+)"/g);
+  if (quoteMatches) {
+    const items = quoteMatches.map(match => match.replace(/"/g, ''));
+    tags.push(...items.filter(item => item.length > 0 && item.length <= 8));
     }
   }
   

@@ -45,7 +45,7 @@ export default function RootLayout({
       <body className="antialiased" suppressHydrationWarning={true}>
         <div id="app-root" className="min-h-screen">
           <PageTransition>
-            {children}
+        {children}
           </PageTransition>
         </div>
       </body>

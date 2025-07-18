@@ -106,11 +106,11 @@ export default function CategoryManagement({
         onCategoryUpdated();
       } else {
         const errorData = await response.json();
-        alert(errorData.error || '创建分类失败');
+        alert(errorData.error || '创建文件夹失败');
       }
     } catch (error) {
       console.error('Error creating category:', error);
-      alert('创建分类时发生错误，请重试');
+              alert('创建文件夹时发生错误，请重试');
     } finally {
       setIsLoading(false);
     }
@@ -149,7 +149,7 @@ export default function CategoryManagement({
 
   // 删除分类
   const handleDeleteCategory = async (categoryId: string) => {
-    if (!confirm('确定要删除这个分类吗？删除后，该分类下的所有笔记将变为无分类状态。')) {
+    if (!confirm('确定要删除这个文件夹吗？删除后，该文件夹下的所有笔记将变为无文件夹状态。')) {
       return;
     }
 
@@ -182,7 +182,7 @@ export default function CategoryManagement({
         <div ref={modalRef} className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
           <div className="text-center">
             <div className="text-red-500 text-lg mb-4">⚠️</div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">无法访问分类管理</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">无法访问文件夹管理</h3>
             <p className="text-gray-600 mb-4">请先登录或注册账户</p>
             <button
               onClick={onClose}
@@ -202,7 +202,7 @@ export default function CategoryManagement({
         {/* 头部 */}
         <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-gray-900">分类管理</h2>
+            <h2 className="text-xl font-semibold text-gray-900">文件夹管理</h2>
             <button
               onClick={onClose}
               className="p-2 hover:bg-gray-200 rounded-full transition-colors"
@@ -220,7 +220,7 @@ export default function CategoryManagement({
           <div className="mb-6 space-y-4">
             {/* 分类名称 */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">分类名称</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">文件夹名称</label>
               <input
                 type="text"
                 value={newCategory.name}
@@ -238,8 +238,8 @@ export default function CategoryManagement({
             {/* 是否私密 */}
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
               <div>
-                <label className="text-sm font-medium text-gray-700">私密分类</label>
-                <p className="text-xs text-gray-500 mt-1">私密分类只有你可以访问</p>
+                <label className="text-sm font-medium text-gray-700">私密文件夹</label>
+                <p className="text-xs text-gray-500 mt-1">私密文件夹只有你可以访问</p>
               </div>
               <button
                 onClick={() => setNewCategory({ ...newCategory, is_private: !newCategory.is_private })}
@@ -248,6 +248,7 @@ export default function CategoryManagement({
                 }`}
               >
                 <span
+                
                   className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
                     newCategory.is_private ? 'translate-x-6' : 'translate-x-1'
                   }`}
@@ -261,7 +262,7 @@ export default function CategoryManagement({
               disabled={!newCategory.name.trim() || isLoading}
               className="w-full bg-blue-600 text-white py-3 px-4 rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
             >
-              {isLoading ? '创建中...' : '创建分类'}
+              {isLoading ? '创建中...' : '创建文件夹'}
             </button>
           </div>
 
@@ -297,7 +298,7 @@ export default function CategoryManagement({
                           )}
                         </div>
                         <div className="text-sm text-gray-500">
-                          {category.is_private ? '私密分类' : '公开分类'}
+                          {category.is_private ? '私密文件夹' : '公开文件夹'}
                         </div>
                       </div>
                     </div>
@@ -330,8 +331,8 @@ export default function CategoryManagement({
                 <svg className="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                 </svg>
-                <p>还没有创建任何分类</p>
-                <p className="text-sm mt-1">点击上方按钮创建你的第一个分类</p>
+                <p>还没有创建任何文件夹</p>
+                <p className="text-sm mt-1">点击上方按钮创建你的第一个文件夹</p>
               </div>
             )}
           </div>
@@ -359,7 +360,7 @@ function CategoryEditForm({
     <div className="space-y-4">
       {/* 分类名称 */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">分类名称</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">文件夹名称</label>
         <input
           type="text"
           value={editData.name}
@@ -370,7 +371,7 @@ function CategoryEditForm({
 
       {/* 是否私密 */}
       <div className="flex items-center justify-between">
-        <label className="text-sm font-medium text-gray-700">私密分类</label>
+        <label className="text-sm font-medium text-gray-700">私密文件夹</label>
         <button
           onClick={() => setEditData({ ...editData, is_private: !editData.is_private })}
           className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${

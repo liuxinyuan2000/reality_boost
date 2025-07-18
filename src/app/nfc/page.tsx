@@ -60,11 +60,11 @@ function NFCPageInner() {
           </>
         ) : (
           <>
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#a5a6f6] mx-auto mb-4"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#a5a6f6] mx-auto mb-4"></div>
             <div className="text-xl font-semibold text-gray-700 mb-2">等待NFC碰撞...</div>
             <div className="text-gray-500">
               请将设备靠近对方的NFC标签
-            </div>
+        </div>
           </>
         )}
       </div>
