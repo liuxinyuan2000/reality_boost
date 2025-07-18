@@ -100,7 +100,7 @@ export default function ThemeButton({ userId, onThemeChange }: ThemeButtonProps)
         onClick={() => setShowModal(true)}
         className="button-secondary text-sm py-2 px-4 flex items-center gap-2"
       >
-        <span>互动主题</span>
+        <span>互动</span>
       </button>
 
       {/* 模态框 */}
@@ -122,7 +122,7 @@ export default function ThemeButton({ userId, onThemeChange }: ThemeButtonProps)
                 className="text-lg font-bold"
                 style={{ color: 'var(--foreground)' }}
               >
-                互动主题
+                互动
               </h3>
               <button
                 onClick={() => setShowModal(false)}

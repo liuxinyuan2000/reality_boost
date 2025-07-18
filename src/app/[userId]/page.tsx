@@ -878,18 +878,12 @@ export default function UserPage() {
                 </div>
             
             <div className="flex items-center gap-4">
-              <span 
-                className="text-sm font-medium"
-                style={{ color: 'var(--foreground)' }}
-              >
-                {user.username} 的主页
-              </span>
               <ThemeButton userId={currentUser?.id || ''} />
               <Link 
                 href={`/${user.id}/tags`} 
                 className="button-secondary text-sm py-2 px-4"
               >
-                我的状态
+                状态
               </Link>
               <Link 
                 href="/friends"
