@@ -203,15 +203,20 @@ export default function EnhancedChatInput({
             value.includes(`@${mention.friendName}/${mention.folderName}`) && (
               <div
                 key={mention.id}
-                className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg text-sm"
+                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm"
+                style={{
+                  background: 'var(--primary)',
+                  border: '1px solid var(--primary)',
+                  color: 'white'
+                }}
               >
                 <span className="text-lg">{mention.folderIcon}</span>
-                <span className="text-blue-900">
+                <span className="text-white">
                   <span className="font-medium">{mention.friendName}</span>
-                  <span className="text-blue-600 mx-1">/</span>
+                  <span className="opacity-80 mx-1">/</span>
                   <span>{mention.folderName}</span>
                 </span>
-                <div className="text-xs text-blue-600 bg-blue-100 px-2 py-0.5 rounded">
+                <div className="text-xs bg-white bg-opacity-20 px-2 py-0.5 rounded text-white">
                   引用中
                 </div>
               </div>
@@ -232,8 +237,9 @@ export default function EnhancedChatInput({
           className="input-field w-full h-32 text-lg py-4 resize-none"
           style={{
             background: mentions.some(m => value.includes(`@${m.friendName}/${m.folderName}`)) 
-              ? 'linear-gradient(to right, #f0f9ff, #ffffff)' 
-              : undefined
+              ? 'linear-gradient(to right, var(--background-secondary), var(--background))' 
+              : undefined,
+            color: 'var(--foreground)'
           }}
         />
         
