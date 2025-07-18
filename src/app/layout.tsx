@@ -42,7 +42,7 @@ export default function RootLayout({
         <meta name="format-detection" content="telephone=no" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
       </head>
-      <body className="antialiased">
+      <body className="antialiased" suppressHydrationWarning={true}>
         <div id="app-root" className="min-h-screen">
           <PageTransition>
             {children}

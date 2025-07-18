@@ -31,6 +31,18 @@ export const clearUserFromStorage = () => {
   localStorage.removeItem('currentUser');
 };
 
+// 清除所有用户相关数据
+export const clearAllUserData = () => {
+  localStorage.removeItem('currentUser');
+  // 清除任何可能存储的聊天消息
+  const keys = Object.keys(localStorage);
+  keys.forEach(key => {
+    if (key.startsWith('chatMessages_')) {
+      localStorage.removeItem(key);
+    }
+  });
+};
+
 // 通过用户ID获取用户信息
 export const getUserById = async (userId: string): Promise<User | null> => {
   try {
@@ -49,6 +61,22 @@ export const getUserById = async (userId: string): Promise<User | null> => {
   } catch (error) {
     console.error('获取用户信息失败:', error);
     return null;
+  }
+};
+
+// 验证用户是否在数据库中存在
+export const validateUser = async (user: User): Promise<boolean> => {
+  try {
+    const { data, error } = await supabase
+      .from("users")
+      .select("id")
+      .eq("id", user.id)
+      .single();
+    
+    return !error && !!data;
+  } catch (error) {
+    console.error('验证用户失败:', error);
+    return false;
   }
 };
 

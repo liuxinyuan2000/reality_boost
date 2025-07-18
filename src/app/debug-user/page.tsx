@@ -1,73 +1,76 @@
 "use client";
-import { getCurrentUser } from "../utils/userUtils";
-import { useState, useEffect } from "react";
+
+import { useEffect, useState } from 'react';
+import { getCurrentUser, clearAllUserData } from '../utils/userUtils';
+import Link from 'next/link';
 
 export default function DebugUserPage() {
-  const [user, setUser] = useState<any>(null);
-  const [localStorageData, setLocalStorageData] = useState<string>('');
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [message, setMessage] = useState('');
 
   useEffect(() => {
-    const currentUser = getCurrentUser();
-    setUser(currentUser);
-    
-    // 显示原始 localStorage 数据
-    try {
-      const rawData = localStorage.getItem('currentUser');
-      setLocalStorageData(rawData || 'null');
-    } catch (error) {
-      setLocalStorageData('Error: ' + error);
-    }
+    const user = getCurrentUser();
+    setCurrentUser(user);
   }, []);
 
-  const clearUser = () => {
-    localStorage.removeItem('currentUser');
-    setUser(null);
-    setLocalStorageData('null');
+  const handleClearAll = () => {
+    clearAllUserData();
+    setCurrentUser(null);
+    setMessage('所有用户数据已清除！');
   };
 
   return (
-    <div className="min-h-screen bg-[#f1f5fb] py-8 px-4" style={{ color: '#222' }}>
-      <div className="max-w-2xl mx-auto">
-        <h1 className="text-2xl font-bold mb-6">用户信息调试</h1>
+    <div className="min-h-screen bg-gray-100 py-8 px-4">
+      <div className="max-w-md mx-auto bg-white rounded-lg shadow p-6">
+        <h1 className="text-2xl font-bold mb-6 text-center">用户调试工具</h1>
         
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
-          <h2 className="text-lg font-semibold mb-4">当前登录用户</h2>
-          {user ? (
+        <div className="space-y-4">
+          <div>
+            <h3 className="font-semibold mb-2">当前用户信息:</h3>
+            {currentUser ? (
+              <div className="bg-gray-50 p-3 rounded">
+                <p><strong>ID:</strong> {currentUser.id}</p>
+                <p><strong>用户名:</strong> {currentUser.username}</p>
+              </div>
+            ) : (
+              <p className="text-gray-500">无当前用户</p>
+            )}
+          </div>
+
+          <div>
+            <h3 className="font-semibold mb-2">操作:</h3>
             <div className="space-y-2">
-              <div><strong>用户ID:</strong> <code className="bg-gray-100 px-2 py-1 rounded">{user.id}</code></div>
-              <div><strong>用户名:</strong> {user.username}</div>
-              <div><strong>创建时间:</strong> {user.created_at}</div>
+              <button
+                onClick={handleClearAll}
+                className="w-full bg-red-600 text-white py-2 px-4 rounded hover:bg-red-700 transition-colors"
+              >
+                清除所有用户数据
+              </button>
+              
+              <Link 
+                href="/"
+                className="block w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition-colors text-center"
+              >
+                返回主页
+              </Link>
             </div>
-          ) : (
-            <div className="text-gray-500">未登录</div>
+          </div>
+
+          {message && (
+            <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
+              {message}
+            </div>
           )}
-        </div>
 
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
-          <h2 className="text-lg font-semibold mb-4">LocalStorage 原始数据</h2>
-          <pre className="bg-gray-100 p-4 rounded text-sm overflow-x-auto" style={{ color: '#222' }}>
-            {localStorageData}
-          </pre>
-        </div>
-
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
-          <h2 className="text-lg font-semibold mb-4">操作</h2>
-          <button 
-            onClick={clearUser}
-            className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
-          >
-            清除用户数据
-          </button>
-        </div>
-
-        <div className="bg-blue-50 rounded-lg p-4">
-          <h3 className="font-semibold mb-2">说明</h3>
-          <ul className="text-sm space-y-1">
-            <li>• 用户信息存储在浏览器的 localStorage 中</li>
-            <li>• 键名：'currentUser'</li>
-            <li>• 值：JSON 格式的用户对象</li>
-            <li>• 清除数据后需要重新登录</li>
-          </ul>
+          <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded">
+            <h4 className="font-semibold text-yellow-800 mb-2">解决分类创建问题:</h4>
+            <ol className="text-sm text-yellow-700 space-y-1">
+              <li>1. 点击"清除所有用户数据"</li>
+              <li>2. 返回主页</li>
+              <li>3. 重新注册或登录</li>
+              <li>4. 尝试创建分类</li>
+            </ol>
+          </div>
         </div>
       </div>
     </div>

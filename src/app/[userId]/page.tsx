@@ -4,15 +4,28 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import AuthForm from '../AuthForm';
-import { getCurrentUser, User } from '../utils/userUtils';
+import { getCurrentUser, User, validateUser, clearAllUserData } from '../utils/userUtils';
 import { supabase } from '../supabaseClient';
 import LoadingSpinner from '../components/LoadingSpinner';
+import CategorySelector from '../components/CategorySelector';
+import CategoryManagement from '../components/CategoryManagement';
+import ChatSessionManagement from '../components/ChatSessionManagement';
 
 interface Note {
   id: string;
   content: string;
   created_at: string;
   user_id: string;
+  category_id?: string;
+  categories?: Category;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  color: string;
+  icon: string;
+  is_private: boolean;
 }
 
 // AI 对话模态框组件
@@ -226,6 +239,17 @@ export default function UserPage() {
   // 定位相关状态
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 
+  // 分类相关状态
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | undefined>(undefined);
+  const [showCategoryManagement, setShowCategoryManagement] = useState(false);
+  const [isPrivateNote, setIsPrivateNote] = useState(false);
+
+  // AI对话会话相关状态
+  const [chatSessions, setChatSessions] = useState<any[]>([]);
+  const [showSessionManagement, setShowSessionManagement] = useState(false);
+  const [categoryMessages, setCategoryMessages] = useState<{ [categoryId: string]: { role: 'user' | 'ai', content: string }[] }>({});
+
   // 自动获取定位
   useEffect(() => {
     if (!userLocation && typeof window !== 'undefined' && navigator.geolocation) {
@@ -239,9 +263,29 @@ export default function UserPage() {
 
   // 获取当前用户
   useEffect(() => {
-    const current = getCurrentUser();
-    setCurrentUser(current);
-    setIsOwnPage(current?.id === userId);
+    const loadCurrentUser = async () => {
+      const current = getCurrentUser();
+      if (current) {
+        // 验证用户是否在数据库中存在
+        const isValid = await validateUser(current);
+        
+        if (!isValid) {
+          // 用户不存在，清除所有数据并提示重新登录
+          clearAllUserData();
+          setCurrentUser(null);
+          setIsOwnPage(false);
+          console.log('用户数据已过期，请重新登录');
+        } else {
+          setCurrentUser(current);
+          setIsOwnPage(current?.id === userId);
+        }
+      } else {
+        setCurrentUser(null);
+        setIsOwnPage(false);
+      }
+    };
+
+    loadCurrentUser();
   }, [userId]);
 
   // 获取页面用户信息
@@ -269,6 +313,74 @@ export default function UserPage() {
     fetchUser();
   }, [userId]);
 
+  // 获取分类
+  useEffect(() => {
+    if (!currentUser || !isOwnPage) return;
+
+    async function fetchCategories() {
+      try {
+        console.log('主页面: 开始获取分类，currentUser:', currentUser);
+        const response = await fetch(`/api/categories?userId=${currentUser!.id}`);
+        if (response.ok) {
+          const data = await response.json();
+          console.log('主页面: 分类API响应:', data);
+          setCategories(data.categories || []);
+        } else {
+          console.error('主页面: 分类API请求失败:', response.status, response.statusText);
+        }
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+      }
+    }
+
+    fetchCategories();
+  }, [currentUser, isOwnPage]);
+
+  // 获取AI对话会话
+  useEffect(() => {
+    if (!currentUser || !isOwnPage) return;
+
+    async function fetchChatSessions() {
+      try {
+        const response = await fetch('/api/chat-sessions');
+        if (response.ok) {
+          const data = await response.json();
+          setChatSessions(data.sessions || []);
+        }
+      } catch (error) {
+        console.error('Error fetching chat sessions:', error);
+      }
+    }
+
+    fetchChatSessions();
+  }, [currentUser, isOwnPage]);
+
+  // 当分类改变且在AI模式时，自动加载该分类的对话历史
+  useEffect(() => {
+    if (mode === 'ai' && currentUser) {
+      const categoryId = selectedCategoryId || 'default';
+      const currentMessages = categoryMessages[categoryId] || [];
+      setChatMessages(currentMessages);
+      
+      // 从本地存储加载历史消息
+      if (typeof window !== 'undefined' && selectedCategoryId) {
+        const stored = localStorage.getItem(`chatMessages_${currentUser.id}_${selectedCategoryId}`);
+        if (stored) {
+          try {
+            const messages = JSON.parse(stored);
+            setCategoryMessages(prev => ({
+              ...prev,
+              [selectedCategoryId]: messages
+            }));
+            setChatMessages(messages);
+          } catch (error) {
+            console.error('Error loading stored messages:', error);
+          }
+        }
+      }
+    }
+  }, [selectedCategoryId, mode, currentUser, categoryMessages]);
+
   // 获取笔记
   useEffect(() => {
     if (!user || !currentUser) return;
@@ -276,7 +388,16 @@ export default function UserPage() {
     async function fetchNotes() {
       const { data, error } = await supabase
         .from('notes')
-        .select('*')
+        .select(`
+          *,
+          categories (
+            id,
+            name,
+            color,
+            icon,
+            is_private
+          )
+        `)
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
@@ -384,8 +505,18 @@ export default function UserPage() {
         .insert([{
           user_id: currentUser.id,
           content: input.trim(),
+          category_id: selectedCategoryId,
         }])
-        .select()
+        .select(`
+          *,
+          categories (
+            id,
+            name,
+            color,
+            icon,
+            is_private
+          )
+        `)
         .single();
 
       if (!error && data) {
@@ -402,18 +533,53 @@ export default function UserPage() {
   const handleAIChat = async (message: string) => {
     if (!currentUser || !user) return;
 
-    setChatMessages([...chatMessages, { role: 'user', content: message }]);
+    const categoryId = selectedCategoryId || 'default';
+    const currentMessages = categoryMessages[categoryId] || [];
+    const newUserMessage = { role: 'user' as const, content: message };
+    const updatedMessages = [...currentMessages, newUserMessage];
+
+    // 更新本地消息
+    setCategoryMessages(prev => ({
+      ...prev,
+      [categoryId]: updatedMessages
+    }));
+    setChatMessages(updatedMessages);
     setChatSending(true);
+
     try {
       const res = await fetch('/api/ai-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentUser.id, message }),
+        body: JSON.stringify({ 
+          userId: currentUser.id, 
+          message,
+          categoryId: selectedCategoryId,
+          messageHistory: currentMessages.slice(-10) // 发送最近10条消息作为上下文
+        }),
       });
       const data = await res.json();
-      setChatMessages(current => [...current, { role: 'ai', content: data.reply || 'AI 没有返回内容' }]);
+      const aiMessage = { role: 'ai' as const, content: data.reply || 'AI 没有返回内容' };
+      const finalMessages = [...updatedMessages, aiMessage];
+
+      // 更新本地消息
+      setCategoryMessages(prev => ({
+        ...prev,
+        [categoryId]: finalMessages
+      }));
+      setChatMessages(finalMessages);
+
+      // 保存消息到本地存储（可选）
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`chatMessages_${currentUser.id}_${categoryId}`, JSON.stringify(finalMessages));
+      }
     } catch {
-      setChatMessages(current => [...current, { role: 'ai', content: 'AI 回复失败，请重试' }]);
+      const errorMessage = { role: 'ai' as const, content: 'AI 回复失败，请重试' };
+      const finalMessages = [...updatedMessages, errorMessage];
+      setCategoryMessages(prev => ({
+        ...prev,
+        [categoryId]: finalMessages
+      }));
+      setChatMessages(finalMessages);
     }
     setChatSending(false);
   };
@@ -473,6 +639,60 @@ export default function UserPage() {
       }
     } catch (error) {
       console.error('点赞操作失败:', error);
+    }
+  };
+
+  // 处理分类更新
+  const handleCategoryUpdated = async () => {
+    if (!currentUser) return;
+    try {
+      const response = await fetch('/api/categories');
+      if (response.ok) {
+        const data = await response.json();
+        setCategories(data.categories || []);
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
+
+  // 处理会话更新
+  const handleSessionUpdated = async () => {
+    if (!currentUser) return;
+    try {
+      const response = await fetch('/api/chat-sessions');
+      if (response.ok) {
+        const data = await response.json();
+        setChatSessions(data.sessions || []);
+      }
+    } catch (error) {
+      console.error('Error fetching chat sessions:', error);
+    }
+  };
+
+  // 处理分类切换时加载对话历史
+  const handleCategoryChange = (categoryId: string | undefined) => {
+    setSelectedCategoryId(categoryId);
+    
+    // 加载该分类的对话历史
+    const currentMessages = categoryMessages[categoryId || 'default'] || [];
+    setChatMessages(currentMessages);
+    
+    // 如果本地存储有该分类的消息，也加载进来
+    if (typeof window !== 'undefined' && currentUser && categoryId) {
+      const stored = localStorage.getItem(`chatMessages_${currentUser.id}_${categoryId}`);
+      if (stored) {
+        try {
+          const messages = JSON.parse(stored);
+          setCategoryMessages(prev => ({
+            ...prev,
+            [categoryId]: messages
+          }));
+          setChatMessages(messages);
+        } catch (error) {
+          console.error('Error loading stored messages:', error);
+        }
+      }
     }
   };
 
@@ -763,29 +983,41 @@ export default function UserPage() {
                  style={{ background: 'var(--background-secondary)' }}
                  onClick={() => setMode(mode === 'ai' ? 'note' : 'ai')}
                >
-                                    <div 
-                     className={`absolute top-1 bottom-1 bg-white rounded-lg transition-all duration-300 ease-out shadow-sm ${
-                       mode === 'ai' ? 'left-1 w-[88px]' : 'left-[93px] w-[88px]'
-                     }`}
-                     style={{ boxShadow: 'var(--shadow-1)' }}
-                   />
-                   <div
-                     className={`relative z-10 px-3 py-2 text-sm font-semibold transition-all duration-300 rounded-lg flex items-center justify-center whitespace-nowrap ${
-                       mode === 'ai' ? 'text-gray-900' : 'text-gray-500'
-                     }`}
-                     style={{ width: '88px' }}
-                   >
-                     AI对话
-                   </div>
-                   <div
-                     className={`relative z-10 px-3 py-2 text-sm font-semibold transition-all duration-300 rounded-lg flex items-center justify-center whitespace-nowrap ${
-                       mode === 'note' ? 'text-gray-900' : 'text-gray-500'
-                     }`}
-                     style={{ width: '88px' }}
-                   >
-                     写笔记
-                   </div>
+                 <div 
+                   className={`absolute top-1 bottom-1 bg-white rounded-lg transition-all duration-300 ease-out shadow-sm ${
+                     mode === 'ai' ? 'left-1 w-[88px]' : 'left-[93px] w-[88px]'
+                   }`}
+                   style={{ boxShadow: 'var(--shadow-1)' }}
+                 />
+                 <div
+                   className={`relative z-10 px-3 py-2 text-sm font-semibold transition-all duration-300 rounded-lg flex items-center justify-center whitespace-nowrap ${
+                     mode === 'ai' ? 'text-gray-900' : 'text-gray-500'
+                   }`}
+                   style={{ width: '88px' }}
+                 >
+                   AI对话
+                 </div>
+                 <div
+                   className={`relative z-10 px-3 py-2 text-sm font-semibold transition-all duration-300 rounded-lg flex items-center justify-center whitespace-nowrap ${
+                     mode === 'note' ? 'text-gray-900' : 'text-gray-500'
+                   }`}
+                   style={{ width: '88px' }}
+                 >
+                   写笔记
+                 </div>
                </div>
+             </div>
+
+             {/* 分类选择器 */}
+             <div className="mb-4">
+               <CategorySelector
+                 userId={currentUser?.id || ''}
+                 selectedCategoryId={selectedCategoryId}
+                 isPrivate={mode === 'note' ? isPrivateNote : false}
+                 onCategoryChange={mode === 'ai' ? handleCategoryChange : setSelectedCategoryId}
+                 onPrivateChange={mode === 'note' ? setIsPrivateNote : () => {}}
+                 onCreateCategory={() => setShowCategoryManagement(true)}
+               />
              </div>
 
             {/* 输入框 */}
@@ -834,6 +1066,12 @@ export default function UserPage() {
             {/* AI对话历史 */}
             {mode === 'ai' && chatMessages.length > 0 && (
               <div className="mt-6 space-y-3">
+                <div className="text-xs text-center mb-2" style={{ color: 'var(--foreground-tertiary)' }}>
+                  {selectedCategoryId 
+                    ? `${categories.find(c => c.id === selectedCategoryId)?.name || '未知分类'} 的对话历史`
+                    : '通用对话历史'
+                  }
+                </div>
                 {chatMessages.slice(-3).map((msg, i) => (
                   <div key={i} className={msg.role === 'user' ? 'text-right' : 'text-left'}>
                     <span 
@@ -866,23 +1104,31 @@ export default function UserPage() {
 
         {/* 便签墙 */}
         <div className="min-h-[60vh] flex flex-wrap gap-6 justify-center items-start">
-          {notes.length === 0 ? (
-            <div 
-              className="text-center w-full py-20"
-              style={{ color: 'var(--foreground-tertiary)' }}
-            >
-              <div className="text-lg">还没有笔记哦</div>
-              <div className="text-sm mt-2">开始记录你的想法吧</div>
-            </div>
-          ) : (
-            notes.map((note, i) => (
-              <NoteCard 
-                key={note.id} 
-                content={note.content} 
-                index={i}
-              />
-            ))
-          )}
+          {(() => {
+            const filteredNotes = selectedCategoryId 
+              ? notes.filter(note => note.category_id === selectedCategoryId)
+              : notes;
+            
+            return filteredNotes.length === 0 ? (
+              <div 
+                className="text-center w-full py-20"
+                style={{ color: 'var(--foreground-tertiary)' }}
+              >
+                <div className="text-lg">
+                  {selectedCategoryId ? '该分类下还没有笔记' : '还没有笔记哦'}
+                </div>
+                <div className="text-sm mt-2">开始记录你的想法吧</div>
+              </div>
+            ) : (
+              filteredNotes.map((note, i) => (
+                <NoteCard 
+                  key={note.id} 
+                  content={note.content} 
+                  index={i}
+                />
+              ))
+            );
+          })()}
         </div>
       </div>
 
@@ -894,6 +1140,22 @@ export default function UserPage() {
         onSend={handleAIChat}
         sending={chatSending}
         anchorRef={chatBtnRef}
+      />
+
+      {/* 分类管理模态框 */}
+      <CategoryManagement
+        isOpen={showCategoryManagement}
+        onClose={() => setShowCategoryManagement(false)}
+        onCategoryUpdated={handleCategoryUpdated}
+        currentUserId={currentUser?.id}
+      />
+
+      {/* AI对话管理模态框 */}
+      <ChatSessionManagement
+        isOpen={showSessionManagement}
+        onClose={() => setShowSessionManagement(false)}
+        onSessionUpdated={handleSessionUpdated}
+        currentUserId={currentUser?.id}
       />
     </div>
   );
