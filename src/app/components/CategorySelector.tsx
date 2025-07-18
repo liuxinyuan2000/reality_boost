@@ -121,9 +121,8 @@ export default function CategorySelector({
                 </>
               ) : (
                 <>
-                  <span className="text-lg">📝</span>
                   <span className="text-white">
-                    选择文件夹
+                    默认
                   </span>
                 </>
               )}
@@ -168,8 +167,7 @@ export default function CategorySelector({
                   setShowDropdown(false);
                 }}
               >
-                <span className="text-lg">📝</span>
-                <span className="text-white">临时对话</span>
+                <span className="text-white">默认</span>
               </div>
 
               {/* 分类列表 */}
@@ -179,7 +177,7 @@ export default function CategorySelector({
                 </div>
               ) : categories.length === 0 ? (
                 <div className="px-4 py-3 text-center" style={{ color: 'var(--foreground-secondary)' }}>
-                  临时对话
+                  默认
                 </div>
               ) : (
                 categories.map((category) => (

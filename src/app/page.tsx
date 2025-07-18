@@ -81,7 +81,7 @@ export default function Home() {
           />
           <FeatureCard 
             icon="🎯"
-            title="共同话题"
+            title="Nebula Key"
             description="发现有趣的聊天话题"
           />
         </div>
@@ -162,7 +162,7 @@ export default function Home() {
             primary
           />
           <ActionCard 
-            title="查看我的标签"
+            title="查看我的状态"
             description="AI 生成的个性化状态标签"
             icon="🏷️"
             href={`/${user.id}/tags`}

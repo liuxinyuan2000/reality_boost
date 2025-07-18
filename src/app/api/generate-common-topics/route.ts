@@ -60,9 +60,9 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // 并行获取两个用户的笔记
-    const [currentUserNotes, targetUserNotes, currentUser, targetUser
-      , nearbyPOIs
+    // 并行获取两个用户的笔记、用户信息、主题和附近POI
+    const [currentUserNotes, targetUserNotes, currentUser, targetUser, 
+      currentUserTheme, targetUserTheme, nearbyPOIs
     ] = await Promise.all([
       supabase
         .from('notes')
@@ -86,6 +86,18 @@ export async function POST(req: NextRequest) {
         .select('username')
         .eq('id', targetUserId)
         .single(),
+      supabase
+        .from('user_outing_themes')
+        .select('theme_name, theme_description')
+        .eq('user_id', currentUserId)
+        .eq('is_active', true)
+        .maybeSingle(),
+      supabase
+        .from('user_outing_themes')
+        .select('theme_name, theme_description')
+        .eq('user_id', targetUserId)
+        .eq('is_active', true)
+        .maybeSingle(),
       fetchNearbyPOIs(location)
     ]);
 
@@ -99,6 +111,22 @@ export async function POST(req: NextRequest) {
 
     const currentNotesText = currentUserHasNotes ? currentUserNotes.data?.map((n: any) => n.content).join('\n') || '' : '';
     const targetNotesText = targetUserHasNotes ? targetUserNotes.data?.map((n: any) => n.content).join('\n') || '' : '';
+    
+    // 处理用户主题信息
+    const currentTheme = currentUserTheme?.data;
+    const targetTheme = targetUserTheme?.data;
+    
+    let themeInfo = '';
+    if (currentTheme || targetTheme) {
+      themeInfo = '\n当前出门主题信息：\n';
+      if (currentTheme) {
+        themeInfo += `${currentUser?.data?.username || '用户1'}设置了主题："${currentTheme.theme_name}"（${currentTheme.theme_description}）\n`;
+      }
+      if (targetTheme) {
+        themeInfo += `${targetUser?.data?.username || '用户2'}设置了主题："${targetTheme.theme_name}"（${targetTheme.theme_description}）\n`;
+      }
+      themeInfo += '请重点关注这些主题，生成相关的话题建议。\n';
+    }
     
     let localInfo = '';
     if (Array.isArray(nearbyPOIs) && nearbyPOIs.length > 0) {
@@ -144,7 +172,7 @@ export async function POST(req: NextRequest) {
   ]
 }
 
-${localInfo}
+${themeInfo}${localInfo}
 
 ${existingUsername}的笔记：
 ${existingUserNotes || '暂无笔记'}`;
@@ -177,7 +205,7 @@ ${existingUserNotes || '暂无笔记'}`;
   ]
 }
 
-${localInfo}
+${themeInfo}${localInfo}
 
 用户信息：
 ${currentUser?.data?.username || '用户1'} 和 ${targetUser?.data?.username || '用户2'} 都是新用户，还没有笔记记录。`;
@@ -211,7 +239,7 @@ ${currentUser?.data?.username || '用户1'} 和 ${targetUser?.data?.username || 
   ]
 }
 
-${localInfo}
+${themeInfo}${localInfo}
 
 ${currentUser?.data?.username || '用户1'}的笔记：
 ${currentNotesText || '暂无笔记'}

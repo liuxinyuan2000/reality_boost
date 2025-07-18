@@ -11,6 +11,7 @@ import CategorySelector from '../components/CategorySelector';
 import CategoryManagement from '../components/CategoryManagement';
 import ChatSessionManagement from '../components/ChatSessionManagement';
 import EnhancedChatInput from '../components/EnhancedChatInput';
+import ThemeButton from '../components/ThemeButton';
 
 interface Note {
   id: string;
@@ -224,7 +225,6 @@ export default function UserPage() {
   // 好友系统相关状态
   const [friendshipStatus, setFriendshipStatus] = useState<'none' | 'friends'>('none');
   const [friendsLoading, setFriendsLoading] = useState(false);
-  const [likeStatus, setLikeStatus] = useState<{liked: boolean, count: number}>({liked: false, count: 0});
 
   // 定位相关状态
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
@@ -399,7 +399,7 @@ export default function UserPage() {
     fetchNotes();
   }, [user, currentUser, userId]);
 
-  // 检查好友状态和点赞状态
+  // 检查好友状态
   useEffect(() => {
     if (!currentUser || !user || currentUser.id === user.id) return;
 
@@ -407,35 +407,14 @@ export default function UserPage() {
       try {
         if (!currentUser || !user) return;
         
-                 // 检查好友状态
-         const { data: friendship } = await supabase
-           .from('friendships')
-           .select('*')
-           .or(`and(user1_id.eq.${currentUser.id},user2_id.eq.${user.id}),and(user1_id.eq.${user.id},user2_id.eq.${currentUser.id})`)
-           .single();
+        // 检查好友状态
+        const { data: friendship } = await supabase
+          .from('friendships')
+          .select('*')
+          .or(`and(user1_id.eq.${currentUser.id},user2_id.eq.${user.id}),and(user1_id.eq.${user.id},user2_id.eq.${currentUser.id})`)
+          .single();
 
-         setFriendshipStatus(friendship ? 'friends' : 'none');
-
-         if (friendship && currentUser && user) {
-           // 检查点赞状态
-           const [{ data: likeData }, { count: likeCount }] = await Promise.all([
-             supabase
-               .from('likes')
-               .select('*')
-               .eq('liker_id', currentUser.id)
-               .eq('target_user_id', user.id)
-               .single(),
-             supabase
-               .from('likes')
-               .select('*', { count: 'exact', head: true })
-               .eq('target_user_id', user.id)
-           ]);
-
-           setLikeStatus({
-             liked: !!likeData,
-             count: likeCount || 0
-           });
-         }
+        setFriendshipStatus(friendship ? 'friends' : 'none');
       } catch (error) {
         console.error('检查关系状态失败:', error);
       }
@@ -462,8 +441,8 @@ export default function UserPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-            userId1: currentUser.id, 
-            userId2: user.id,
+            currentUserId: currentUser.id, 
+            targetUserId: user.id,
             location: userLocation 
         }),
       });
@@ -593,44 +572,11 @@ export default function UserPage() {
       const data = await response.json();
       if (data.success) {
         setFriendshipStatus('friends');
-        // 重新检查点赞状态
-        const { count } = await supabase
-          .from('likes')
-          .select('*', { count: 'exact', head: true })
-          .eq('target_user_id', user.id);
-        
-        setLikeStatus(prev => ({ ...prev, count: count || 0 }));
-        }
-      } catch (error) {
+      }
+    } catch (error) {
       console.error('添加好友失败:', error);
     }
     setFriendsLoading(false);
-  };
-
-  // 点赞/取消点赞
-  const handleLike = async () => {
-    if (!currentUser || !user || friendshipStatus !== 'friends') return;
-
-    try {
-      const response = await fetch('/api/likes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          likerId: currentUser.id,
-          targetUserId: user.id,
-        }),
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        setLikeStatus({
-          liked: data.action === 'liked',
-          count: data.likeCount || 0
-        });
-      }
-    } catch (error) {
-      console.error('点赞操作失败:', error);
-    }
   };
 
   // 处理分类更新
@@ -773,7 +719,6 @@ export default function UserPage() {
 
   // 非本人页面：显示共同话题
   if (!isOwnPage) {
-    const emojiList = ['🌍', '🎮', '🎤', '🍔', '🏞️', '🎨'];
     return (
       <div 
         className="min-h-screen flex flex-col items-center justify-center py-12 px-4"
@@ -785,8 +730,8 @@ export default function UserPage() {
               className="text-3xl font-bold mb-4 flex items-center justify-center gap-2"
               style={{ color: 'var(--primary)' }}
             >
-              ✦ 共同话题
-          </h2>
+              ✦ Nebula Key
+            </h2>
             
             {currentUser && user && (
               <div className="flex items-center justify-center gap-4 mb-6">
@@ -797,27 +742,16 @@ export default function UserPage() {
                   {currentUser.username} & {user.username}
                 </div>
                 {friendshipStatus === 'friends' ? (
-                  <div className="flex items-center gap-3">
-                    <span 
-                      className="inline-flex items-center gap-1 text-sm px-3 py-1 rounded-full"
-                      style={{ 
-                        background: 'var(--success)',
-                        color: 'white'
-                      }}
-                    >
-                      <span>👥</span>
-                      已是好友
-                    </span>
-                    <button
-                      onClick={handleLike}
-                      className={`flex items-center gap-1 px-3 py-1 rounded-full text-sm transition-all duration-200 ${
-                        likeStatus.liked ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600'
-                      }`}
-                    >
-                      <span>{likeStatus.liked ? '❤️' : '🤍'}</span>
-                      <span>{likeStatus.count}</span>
-                    </button>
-                  </div>
+                  <span 
+                    className="inline-flex items-center gap-1 text-sm px-3 py-1 rounded-full"
+                    style={{ 
+                      background: 'var(--success)',
+                      color: 'white'
+                    }}
+                  >
+                    <span>👥</span>
+                    已是好友
+                  </span>
                 ) : (
                   <button
                     onClick={handleAddFriend}
@@ -832,34 +766,50 @@ export default function UserPage() {
           </div>
           
           {loadingTopics ? (
-            <div 
-              className="text-center py-12 text-lg"
-              style={{ color: 'var(--foreground-secondary)' }}
-            >
-              AI正在冥思苦想中...
+            <div className="text-center py-16">
+              <LoadingSpinner 
+                size="lg" 
+                text="AI正在冥思苦想中..." 
+                className="animate-pulse"
+              />
+              <div 
+                className="mt-6 text-sm animate-bounce"
+                style={{ color: 'var(--foreground-tertiary)' }}
+              >
+                正在分析你们的内容...
+              </div>
             </div>
           ) : (
             <>
               {commonTopics.length === 0 ? (
-                <div 
-                  className="text-center py-12"
-                  style={{ color: 'var(--foreground-tertiary)' }}
-                >
-                  暂无共同话题，快多写点笔记试试吧！
+                <div className="text-center py-16">
+                  <div 
+                    className="text-lg mb-2"
+                    style={{ color: 'var(--foreground-secondary)' }}
+                  >
+                    暂无共同话题
+                  </div>
+                  <div 
+                    className="text-sm animate-pulse"
+                    style={{ color: 'var(--foreground-tertiary)' }}
+                  >
+                    📝 快多写点笔记，让AI发现你们的有趣联系吧！
+                  </div>
                 </div>
               ) : (
                 <ul className="space-y-6">
                   {commonTopics.map((topic, i) => (
                     <li 
                       key={i} 
-                      className="p-6 rounded-2xl transition-transform duration-300 hover:scale-[1.02]"
+                      className="p-6 rounded-2xl transition-all duration-500 hover:scale-[1.02] animate-fade-in-up opacity-0"
                       style={{ 
                         background: 'var(--background-secondary)',
-                        border: '1px solid var(--separator)'
+                        border: '1px solid var(--separator)',
+                        animationDelay: `${i * 150}ms`,
+                        animationFillMode: 'forwards'
                       }}
                     >
                       <div className="flex items-center gap-2 mb-3">
-                        <span className="text-2xl">{emojiList[i % emojiList.length]}</span>
                         <span 
                           className="text-lg font-bold"
                           style={{ color: 'var(--foreground)' }}
@@ -872,7 +822,7 @@ export default function UserPage() {
                           className="text-sm mb-2 italic"
                           style={{ color: 'var(--secondary)' }}
                         >
-                          💡 {topic.insight}
+                          {topic.insight}
                         </div>
                       )}
                       <div 
@@ -893,15 +843,6 @@ export default function UserPage() {
                   ))}
                 </ul>
               )}
-              
-              <div className="mt-8 text-center">
-                <Link 
-                  href="/"
-                  className="button-secondary px-6 py-3"
-                >
-                  返回主页
-                </Link>
-              </div>
             </>
           )}
         </div>
@@ -943,6 +884,7 @@ export default function UserPage() {
               >
                 {user.username} 的主页
               </span>
+              <ThemeButton userId={currentUser?.id || ''} />
               <Link 
                 href={`/${user.id}/tags`} 
                 className="button-secondary text-sm py-2 px-4"

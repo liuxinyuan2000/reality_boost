@@ -331,7 +331,7 @@ export default function FriendsPage() {
                         href={`/${friend.id}`}
                         className="button-primary text-sm px-4 py-2"
                       >
-                        共同话题
+                        Nebula Key
                       </Link>
                       <Link 
                         href={`/${friend.id}/tags`}
