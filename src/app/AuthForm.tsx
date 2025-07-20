@@ -112,24 +112,7 @@ export default function AuthForm({ onAuth, customUserId }: AuthFormProps) {
 
       {/* 表单 */}
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* 自定义用户ID提示 */}
-      {customUserId && !isLogin && (
-          <div 
-            className="p-4 rounded-xl animate-fade-in"
-            style={{ 
-              background: 'var(--primary)',
-              color: 'white'
-            }}
-          >
-            <div className="flex items-center gap-3">
-              <div className="text-xl">🎯</div>
-              <div>
-                <div className="font-semibold text-sm">专属链接注册</div>
-                <div className="text-sm opacity-90">ID: {customUserId}</div>
-              </div>
-          </div>
-        </div>
-      )}
+
 
         {/* 用户名输入 */}
         <div className="space-y-2">

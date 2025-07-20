@@ -104,6 +104,7 @@ export default function CategoryManagement({
         setNewCategory({ name: '', is_private: false });
         await fetchCategories();
         onCategoryUpdated();
+        onClose(); // 创建成功后自动关闭模态框回到主页
       } else {
         const errorData = await response.json();
         alert(errorData.error || '创建文件夹失败');

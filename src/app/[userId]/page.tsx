@@ -625,10 +625,14 @@ export default function UserPage() {
   const handleCategoryUpdated = async () => {
     if (!currentUser) return;
     try {
-      const response = await fetch('/api/categories');
+      const response = await fetch(`/api/categories?userId=${currentUser.id}`);
       if (response.ok) {
         const data = await response.json();
         setCategories(data.categories || []);
+        // 触发全局事件，通知其他组件分类已更新
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('categoriesUpdated'));
+        }
       }
     } catch (error) {
       console.error('Error fetching categories:', error);
@@ -708,7 +712,7 @@ export default function UserPage() {
             className="text-2xl font-bold mb-2"
             style={{ color: 'var(--foreground)' }}
           >
-            这个专属链接还没有主人
+            这条专属项链还没有主人
           </h1>
           <p 
             className="mb-4"
@@ -716,17 +720,6 @@ export default function UserPage() {
           >
             快来注册成为第一个用户吧！
           </p>
-          <div 
-            className="p-4 rounded-xl"
-            style={{ 
-              background: 'var(--primary)',
-              color: 'white'
-            }}
-          >
-            <div className="text-sm">
-                <strong>专属链接:</strong> {typeof window !== 'undefined' ? `${window.location.origin}/${userId}` : `/${userId}`}
-              </div>
-            </div>
           </div>
           <AuthForm onAuth={handleAuthSuccess} customUserId={userId} />
       </div>
