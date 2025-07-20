@@ -7,13 +7,14 @@ async function fetchNearbyPOIs(location: Location | null): Promise<Poi[]> {
   const AMAP_KEY = process.env.AMAP_KEY;
   if (!AMAP_KEY || !location || !location.lat || !location.lng) return [];
   const locationStr = `${location.lng},${location.lat}`;
-  const types = '110000|120000|050000'; // 景点|展览|美食
-  const url = `https://restapi.amap.com/v3/place/around?key=${AMAP_KEY}&location=${locationStr}&radius=2000&types=${types}&offset=5`;
+  // 专注吃喝玩乐：风景名胜|餐饮服务|生活服务|购物服务|体育休闲服务|商务住宅
+  const types = '110000|050000|070000|060000|080000|120000'; 
+  const url = `https://restapi.amap.com/v3/place/around?key=${AMAP_KEY}&location=${locationStr}&radius=3000&types=${types}&offset=15`;
   console.log('[DEBUG] AMAP fetch url:', url);
   try {
-    // 添加超时控制
+    // 添加超时控制 - 增加到10秒
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒超时
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
     
     const resp = await fetch(url, {
       signal: controller.signal,
@@ -32,7 +33,58 @@ async function fetchNearbyPOIs(location: Location | null): Promise<Poi[]> {
     const amapData = await resp.json();
     console.log('[DEBUG] AMAP raw response:', JSON.stringify(amapData));
     if (amapData.status === '1' && Array.isArray(amapData.pois)) {
-      return amapData.pois.map((poi: any) => ({
+      // 专门筛选吃喝玩乐相关的POI
+      const filteredPois = amapData.pois.filter((poi: any) => {
+        const type = poi.type || '';
+        const name = poi.name || '';
+        
+        console.log('[DEBUG] 检查POI:', name, '类型:', type);
+        
+        // 首先严格排除不想要的类型
+        const excludeKeywords = [
+          '住宅', '小区', '公寓', '写字楼', '办公', '楼盘',
+          '医院', '诊所', '药店', '卫生', '医疗',
+          '银行', '保险', '证券', 'ATM', '金融',
+          '加油', '停车', '洗车', '维修', '汽车',
+          '政府', '派出所', '法院', '工商', '税务', '机关',
+          '学校', '幼儿园', '培训', '教育'
+        ];
+        
+        // 如果包含排除关键词，直接过滤掉
+        const hasExcludeKeyword = excludeKeywords.some(keyword => 
+          type.includes(keyword) || name.includes(keyword)
+        );
+        
+        if (hasExcludeKeyword) {
+          console.log('[DEBUG] 排除POI:', name, '原因: 包含排除关键词');
+          return false;
+        }
+        
+        // 然后检查是否包含我们想要的关键词
+        const includeKeywords = [
+          '餐厅', '咖啡', '奶茶', '茶饮', '火锅', '烧烤', '日料', '西餐', '中餐', '小吃', '甜品', '美食',
+          '酒吧', 'KTV', '电影院', '影院', '剧院', '演出', '音乐厅', '娱乐',
+          '商场', '购物', '百货', '超市', 'mall', '广场',
+          '公园', '景点', '博物馆', '美术馆', '艺术馆', '展览馆', '文化', '图书馆', '书店',
+          '健身', '游泳', '瑜伽', '台球', '棋牌', '网吧', '游戏', '运动',
+          '温泉', '按摩', 'SPA', '美容', '理发', '休闲',
+          '酒店', '民宿', '青旅', '宾馆'
+        ];
+        
+        const hasIncludeKeyword = includeKeywords.some(keyword => 
+          type.includes(keyword) || name.includes(keyword)
+        );
+        
+        if (hasIncludeKeyword) {
+          console.log('[DEBUG] 保留POI:', name, '类型:', type);
+          return true;
+        } else {
+          console.log('[DEBUG] 排除POI:', name, '原因: 不包含目标关键词');
+          return false;
+        }
+      });
+      
+      return filteredPois.slice(0, 5).map((poi: any) => ({
         name: poi.name,
         type: poi.type,
         address: poi.address
@@ -40,12 +92,12 @@ async function fetchNearbyPOIs(location: Location | null): Promise<Poi[]> {
     }
   } catch (e) {
     if (e instanceof Error && e.name === 'AbortError') {
-      console.error('[AMAP] 请求超时');
+      console.error('[COMMON-TOPICS] AMAP 请求超时，将生成通用话题');
     } else {
-    console.error('[AMAP] 获取地标失败:', e);
+      console.error('[COMMON-TOPICS] 获取地标失败:', e);
     }
   }
-  return [];
+  return []; // 返回空数组，让AI生成通用话题
 }
 
 export async function POST(req: NextRequest) {
@@ -147,7 +199,7 @@ export async function POST(req: NextRequest) {
       
       systemPrompt = '你是一个善于分析用户兴趣和推荐个性化话题、互动和体验的AI助手。请基于用户的笔记内容，为其推荐适合的话题、互动和体验。';
       
-      prompt = `请像一个很懂人、很会玩的朋友，基于以下用户的历史笔记内容，深度分析他们的兴趣、性格、表达风格，然后给出5个新奇、好玩、个性化的建议。每个建议包含：
+      prompt = `请像一个很懂人、很会玩的朋友，基于以下用户的历史笔记内容，深度分析TA的兴趣、性格、表达风格，然后给出3个新奇、好玩、个性化的建议。每个建议包含：
 - title：一句有趣的标题
 - insight：你发现的有趣细节/性格特点/兴趣倾向（比如"从你的笔记里看出你很喜欢观察生活中的小细节"）
 - suggestion：好玩的话题/互动/体验建议（可以是聊天话题、游戏互动、本地体验等）
@@ -181,7 +233,7 @@ ${existingUserNotes || '暂无笔记'}`;
       // 双方都没有笔记
       systemPrompt = '你是一个善于推荐话题、互动和体验的AI助手。请基于用户的地理位置，推荐适合的话题、互动和体验。';
       
-      prompt = `请像一个很懂人、很会玩的朋友，基于用户当前的地理位置和附近真实地标/活动，给出5个新奇、好玩、适合新用户的建议。每个建议包含：
+      prompt = `请像一个很懂人、很会玩的朋友，基于用户当前的地理位置和附近真实地标/活动，给出3个新奇、好玩、适合新用户的建议。每个建议包含：
 - title：一句有趣的标题
 - insight：为什么推荐这个建议（比如"这是一个很适合新用户探索的话题"）
 - suggestion：好玩的话题/互动/体验建议（可以是聊天话题、游戏互动、本地体验等）
@@ -214,7 +266,7 @@ ${currentUser?.data?.username || '用户1'} 和 ${targetUser?.data?.username || 
       // 正常情况：双方都有笔记或至少一方有笔记
       systemPrompt = '你是一个善于分析用户兴趣和生成共同话题、互动和体验的AI助手。请基于用户的笔记内容，找出可能的共同话题、互动和体验。';
       
-      prompt = `请像一个很懂人、很会玩的朋友，基于以下两位用户的历史笔记内容，深度分析他们的兴趣、性格、表达风格和潜在联系，发现他们自己都没意识到的有趣细节、反差、习惯或隐藏的共同点。然后给出5个新奇、好玩、个性化的建议。每个建议包含：
+      prompt = `请像一个很懂人、很会玩的朋友，基于以下两位用户的历史笔记内容，深度分析TA们的兴趣、性格、表达风格和潜在联系，发现TA们自己都没意识到的有趣细节、反差、习惯或隐藏的共同点。然后给出3个新奇、好玩、个性化的建议。每个建议包含：
 - title：一句有趣的标题
 - insight：你发现的有趣细节/联系/反差（比如"你们都喜欢在笔记里自问自答，其实都挺会自娱自乐"）
 - suggestion：好玩的话题/互动/体验建议（可以是聊天话题、游戏互动、本地体验等）

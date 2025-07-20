@@ -146,7 +146,7 @@ export async function POST(req: NextRequest) {
   try {
     // 获取相关笔记
     const notesText = await getRelevantNotes(userId, message);
-    
+
     // 处理@提及的文件夹
     const mentionedContext = await processMentionedFolders(mentions || [], userId);
 

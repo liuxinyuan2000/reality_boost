@@ -70,7 +70,7 @@ export default function DebugUserPage() {
               <li>3. 重新注册或登录</li>
                               <li>4. 尝试创建文件夹</li>
             </ol>
-          </div>
+        </div>
         </div>
       </div>
     </div>

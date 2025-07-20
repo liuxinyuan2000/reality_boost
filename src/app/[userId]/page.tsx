@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import AuthForm from '../AuthForm';
 import { getCurrentUser, User, validateUser, clearAllUserData } from '../utils/userUtils';
@@ -199,6 +199,7 @@ function NoteCard({ content, index, onEdit, onDelete }: {
 
 export default function UserPage() {
   const params = useParams();
+  const router = useRouter();
   const userId = params.userId as string;
   const [user, setUser] = useState<User | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -423,6 +424,16 @@ export default function UserPage() {
     checkRelationship();
   }, [currentUser, user]);
 
+  // 处理未登录用户的重定向
+  useEffect(() => {
+    if (!isOwnPage && !currentUser && user) {
+      const timer = setTimeout(() => {
+        router.push(`/guest-topics?initiatorUserId=${userId}`);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [isOwnPage, currentUser, user, userId, router]);
+
   // 获取共同话题
   useEffect(() => {
     if (!currentUser || !user || currentUser.id === user.id || hasRequestedTopics.current || isRequestingTopics.current) return;
@@ -441,8 +452,8 @@ export default function UserPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-            currentUserId: currentUser.id, 
-            targetUserId: user.id,
+          currentUserId: currentUser.id, 
+          targetUserId: user.id,
             location: userLocation 
         }),
       });
@@ -462,6 +473,36 @@ export default function UserPage() {
     const timer = setTimeout(fetchCommonTopics, 1000);
     return () => clearTimeout(timer);
   }, [currentUser, user, userLocation]);
+
+  // 刷新共同话题
+  const refreshCommonTopics = async () => {
+    if (isRequestingTopics.current || !currentUser || !user) return;
+    
+    isRequestingTopics.current = true;
+    setLoadingTopics(true);
+
+    try {
+      const response = await fetch('/api/generate-common-topics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          currentUserId: currentUser.id, 
+          targetUserId: user.id,
+          location: userLocation 
+        }),
+      });
+
+      const data = await response.json();
+      if (data.success && data.topics) {
+        setCommonTopics(data.topics);
+      }
+    } catch (error) {
+      console.error('刷新共同话题失败:', error);
+    } finally {
+      setLoadingTopics(false);
+      isRequestingTopics.current = false;
+    }
+  };
 
   // 添加笔记
   const handleAddNote = async () => {
@@ -572,8 +613,8 @@ export default function UserPage() {
       const data = await response.json();
       if (data.success) {
         setFriendshipStatus('friends');
-      }
-    } catch (error) {
+        }
+      } catch (error) {
       console.error('添加好友失败:', error);
     }
     setFriendsLoading(false);
@@ -717,8 +758,22 @@ export default function UserPage() {
     );
   }
 
+
+
   // 非本人页面：显示共同话题
   if (!isOwnPage) {
+    // 如果当前用户未注册，显示重定向页面
+    if (!currentUser) {
+      return (
+        <div 
+          className="min-h-screen flex items-center justify-center"
+          style={{ background: 'var(--background-secondary)' }}
+        >
+          <LoadingSpinner size="lg" text="正在重定向..." />
+        </div>
+      );
+    }
+
     return (
       <div 
         className="min-h-screen flex flex-col items-center justify-center py-12 px-4"
@@ -731,7 +786,32 @@ export default function UserPage() {
               style={{ color: 'var(--primary)' }}
             >
               ✦ Nebula Key
-            </h2>
+              <button
+                onClick={refreshCommonTopics}
+                disabled={loadingTopics}
+                className="ml-4 p-2 rounded-full transition-all duration-200 hover:scale-110 disabled:opacity-50"
+                style={{ 
+                  background: 'var(--background-secondary)',
+                  border: '1px solid var(--separator)',
+                  color: 'var(--foreground-secondary)'
+                }}
+                title="重新生成话题"
+              >
+                <svg 
+                  className={`w-5 h-5 ${loadingTopics ? 'animate-spin' : ''}`} 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth={2} 
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" 
+                  />
+                </svg>
+              </button>
+          </h2>
             
             {currentUser && user && (
               <div className="flex items-center justify-center gap-4 mb-6">
@@ -961,35 +1041,35 @@ export default function UserPage() {
                 currentUserId={currentUser?.id || ''}
               />
             ) : (
-              <div className="relative">
-                <textarea
+          <div className="relative">
+            <textarea
                   className="input-field w-full h-32 text-lg py-4 resize-none"
                   placeholder="写下你的想法..."
-                  value={input}
-                  onChange={e => setInput(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                      e.preventDefault();
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
                       handleAddNote();
-                    }
-                  }}
-                />
-                
+                }
+              }}
+            />
+            
                 {/* 提交按钮 */}
-                <button
+            <button
                   onClick={handleAddNote}
                   disabled={adding || !input.trim()}
                   className="button-primary absolute right-3 w-12 h-12 rounded-full p-0 flex items-center justify-center disabled:opacity-50"
                   style={{ bottom: '36px' }}
                 >
                   {adding ? (
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                    </svg>
-                  )}
-                </button>
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+              )}
+            </button>
                 
                 {/* 快捷键提示 */}
                 <div 
@@ -997,7 +1077,7 @@ export default function UserPage() {
                   style={{ color: 'var(--foreground-tertiary)' }}
                 >
                   💡 按 ⌘/Ctrl + Enter 快速记录
-                </div>
+          </div>
               </div>
             )}
 
@@ -1024,11 +1104,11 @@ export default function UserPage() {
                       }}
                     >
                       {msg.content}
-                    </span>
-                  </div>
+                  </span>
+                </div>
                 ))}
-              </div>
-            )}
+            </div>
+          )}
           </div>
         </div>
 
