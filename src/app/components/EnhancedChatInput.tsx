@@ -15,7 +15,7 @@ interface MentionedFolder {
 interface EnhancedChatInputProps {
   value: string;
   onChange: (value: string) => void;
-  onSend: (message: string, mentions: MentionedFolder[]) => void;
+  onSend: (message: string, mentions: MentionedFolder[], location?: { lat: number; lng: number } | null) => void;
   placeholder?: string;
   disabled?: boolean;
   currentUserId: string;
@@ -35,8 +35,69 @@ export default function EnhancedChatInput({
   const [mentions, setMentions] = useState<MentionedFolder[]>([]);
   const [cursorPosition, setCursorPosition] = useState(0);
   
+  // 定位相关状态
+  const [locationEnabled, setLocationEnabled] = useState(false);
+  const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [locationLoading, setLocationLoading] = useState(false);
+  
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // 获取GPS位置
+  const getCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      alert('您的浏览器不支持定位功能');
+      return;
+    }
+
+    setLocationLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const location = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        };
+        setCurrentLocation(location);
+        setLocationLoading(false);
+        console.log('获取位置成功:', location);
+      },
+      (error) => {
+        setLocationLoading(false);
+        console.error('获取位置失败:', error);
+        
+        let errorMessage = '获取位置失败';
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = '请允许获取位置权限';
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = '位置信息不可用';
+            break;
+          case error.TIMEOUT:
+            errorMessage = '获取位置超时';
+            break;
+        }
+        alert(errorMessage);
+        setLocationEnabled(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 300000 // 5分钟缓存
+      }
+    );
+  };
+
+  // 切换定位状态
+  const toggleLocation = () => {
+    if (!locationEnabled) {
+      getCurrentLocation();
+      setLocationEnabled(true);
+    } else {
+      setLocationEnabled(false);
+      setCurrentLocation(null);
+    }
+  };
 
   // 处理输入变化
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -172,7 +233,10 @@ export default function EnhancedChatInput({
       value.includes(`@${mention.friendName}/${mention.folderName}`)
     );
     
-    onSend(value, currentMentions);
+    // 如果启用了定位且有位置信息，则传递位置
+    const locationToSend = locationEnabled && currentLocation ? currentLocation : null;
+    
+    onSend(value, currentMentions, locationToSend);
     
     // 清理状态
     setMentions([]);
@@ -243,6 +307,27 @@ export default function EnhancedChatInput({
           }}
         />
         
+        {/* 定位按钮 */}
+        <button
+          onClick={toggleLocation}
+          disabled={disabled}
+          className={`absolute bottom-3 right-16 w-10 h-10 rounded-full p-0 flex items-center justify-center transition-all ${
+            locationEnabled 
+              ? 'bg-green-500 hover:bg-green-600 text-white' 
+              : 'bg-gray-200 hover:bg-gray-300 text-gray-600'
+          } disabled:opacity-50`}
+          title={locationEnabled ? '定位已开启' : '点击开启定位'}
+        >
+          {locationLoading ? (
+            <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          )}
+        </button>
+
         {/* 发送按钮 */}
         <button
           onClick={handleSend}
@@ -271,10 +356,15 @@ export default function EnhancedChatInput({
       
       {/* 提示文本 */}
       <div className="mt-2 text-xs text-center" style={{ color: 'var(--foreground-tertiary)' }}>
-        输入 @ 可以引用好友公开的分类 • 按 ⌘/Ctrl + Enter 快速发送
+        输入 @ 可以引用好友公开的分类 
         {showMentions && (
           <span className="ml-2 text-green-600">
             🟢 @提及已激活
+          </span>
+        )}
+        {locationEnabled && currentLocation && (
+          <span className="ml-2 text-green-600">
+            定位已开启
           </span>
         )}
       </div>

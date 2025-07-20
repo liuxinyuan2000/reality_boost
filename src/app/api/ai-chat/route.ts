@@ -1,9 +1,90 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '../../supabaseClient';
 
+interface Location { lat: number; lng: number }
+interface Poi { name: string; type: string; address: string; distance?: string }
+
 interface Note {
   content: string;
   created_at: string;
+}
+
+// 获取附近POI信息（针对AI对话优化）
+async function fetchNearbyPOIsFull(location: Location): Promise<Poi[]> {
+  const AMAP_KEY = process.env.AMAP_KEY;
+  if (!AMAP_KEY || !location || !location.lat || !location.lng) return [];
+  
+  const locationStr = `${location.lng},${location.lat}`;
+  // 扩大搜索范围，包含更多类型
+  const types = '110000|050000|070000|060000|080000|120000|130000|140000|150000|160000|170000|180000|190000'; 
+  const url = `https://restapi.amap.com/v3/place/around?key=${AMAP_KEY}&location=${locationStr}&radius=2000&types=${types}&offset=15&extensions=all`;
+  
+  console.log('[AI-CHAT] AMAP fetch url:', url);
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    
+    const resp = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Reality-Note/1.0'
+      }
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!resp.ok) {
+      console.error('[AI-CHAT] AMAP HTTP错误:', resp.status, resp.statusText);
+      return [];
+    }
+    
+    const amapData = await resp.json();
+    console.log('[AI-CHAT] AMAP 响应:', JSON.stringify(amapData).substring(0, 500));
+    
+    if (amapData.status === '1' && Array.isArray(amapData.pois)) {
+      // 优先保留有用的POI类型
+      const filteredPois = amapData.pois.filter((poi: any) => {
+        const type = poi.type || '';
+        const name = poi.name || '';
+        
+        // 优先关键词
+        const priorityKeywords = [
+          '公园', '广场', '景点', '博物馆', '美术馆', '艺术馆', '展览馆', '文化',
+          '餐厅', '咖啡', '奶茶', '商场', '购物', '超市', '百货',
+          '地铁', '公交', '车站', '医院', '银行', '学校', '大学'
+        ];
+        
+        // 排除不相关的
+        const excludeKeywords = [
+          '停车', '维修', '洗车', '加油', '厕所', '垃圾'
+        ];
+        
+        const hasExclude = excludeKeywords.some(keyword => 
+          type.includes(keyword) || name.includes(keyword)
+        );
+        
+        const hasPriority = priorityKeywords.some(keyword => 
+          type.includes(keyword) || name.includes(keyword)
+        );
+        
+        return !hasExclude && (hasPriority || poi.distance < 1000); // 1公里内或优先地点
+      });
+      
+      return filteredPois.slice(0, 10).map((poi: any) => ({
+        name: poi.name,
+        type: poi.type,
+        address: poi.address || '',
+        distance: poi.distance ? `${Math.round(poi.distance)}米` : undefined
+      }));
+    }
+  } catch (e) {
+    if (e instanceof Error && e.name === 'AbortError') {
+      console.error('[AI-CHAT] AMAP 请求超时');
+    } else {
+      console.error('[AI-CHAT] 获取POI失败:', e);
+    }
+  }
+  return [];
 }
 
 // 智能选择相关笔记（简化版：直接取最近10条）
@@ -161,17 +242,41 @@ export async function POST(req: NextRequest) {
       contextParts.push(mentionedContext);
     }
     
-    const context = contextParts.join('\n\n');
+    // 添加位置信息和附近POI
+    let locationInfo = '';
+    if (location && location.lat && location.lng) {
+      locationInfo = `\n\n用户当前位置：纬度 ${location.lat}，经度 ${location.lng}`;
+      console.log('[AI-CHAT] 用户分享了位置信息:', location);
+      
+      // 获取附近POI信息
+      try {
+        const nearbyPOIs = await fetchNearbyPOIsFull(location);
+        if (nearbyPOIs.length > 0) {
+                     const poiInfo = nearbyPOIs.map((poi: Poi, index: number) => 
+             `${index + 1}. ${poi.name}（${poi.type}，距离约${poi.distance || '未知'}）`
+           ).join('\n');
+          locationInfo += `\n\n附近地点信息：\n${poiInfo}`;
+          console.log('[AI-CHAT] 获取到附近POI:', nearbyPOIs.length, '个');
+        }
+      } catch (error) {
+        console.error('[AI-CHAT] 获取附近POI失败:', error);
+      }
+    }
+    
+    const context = contextParts.join('\n\n') + locationInfo;
 
-    // 改进的 prompt，支持好友文件夹引用
-    const prompt = mentions && mentions.length > 0 
-      ? `用户在对话中引用了好友的文件夹内容作为参考。请基于用户自己的历史笔记和引用的好友文件夹内容来回答问题。
+    // 改进的 prompt，支持好友文件夹引用和位置信息
+    const hasLocationInfo = location && location.lat && location.lng;
+    const hasMentions = mentions && mentions.length > 0;
+    
+    const prompt = hasLocationInfo || hasMentions
+      ? `用户在对话中${hasLocationInfo ? '分享了位置信息' : ''}${hasLocationInfo && hasMentions ? '并' : ''}${hasMentions ? '引用了好友的文件夹内容' : ''}作为参考。请基于用户自己的历史笔记${hasLocationInfo ? '、位置信息' : ''}${hasMentions ? '和引用的好友文件夹内容' : ''}来回答问题。
 
 ${context || '暂无参考内容'}
 
 用户当前问题：${message}
 
-请综合考虑用户自己的历史记录和引用的好友内容来回答，要自然地体现对这些信息的理解和关联。回答控制在200字以内。`
+请综合考虑所有提供的信息来回答${hasLocationInfo ? '，如果位置信息相关，可以提供基于地理位置的建议' : ''}，要自然地体现对这些信息的理解和关联。回答控制在200字以内。`
       : `基于用户的历史笔记内容，回答用户的问题。
 
 ${context || '暂无历史笔记'}

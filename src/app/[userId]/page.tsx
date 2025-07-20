@@ -36,7 +36,7 @@ function ChatModal({ open, onClose, messages, onSend, sending, anchorRef, curren
   open: boolean;
   onClose: () => void;
   messages: { role: 'user' | 'ai', content: string }[];
-  onSend: (msg: string) => void;
+  onSend: (msg: string, mentions?: any[], location?: { lat: number; lng: number } | null) => void;
   sending: boolean;
   anchorRef: React.RefObject<HTMLButtonElement | null>;
   currentUserId: string;
@@ -117,9 +117,9 @@ function ChatModal({ open, onClose, messages, onSend, sending, anchorRef, curren
           <EnhancedChatInput
             value={input}
             onChange={setInput}
-            onSend={(message) => {
+            onSend={(message, mentions, location) => {
               if (message.trim() && !sending) {
-                onSend(message);
+                onSend(message, mentions, location);
                 setInput("");
               }
             }}
@@ -242,9 +242,7 @@ export default function UserPage() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [isNewUser, setIsNewUser] = useState(false);
 
-  // AI对话会话相关状态
-  const [chatSessions, setChatSessions] = useState<any[]>([]);
-  const [showSessionManagement, setShowSessionManagement] = useState(false);
+  // AI对话相关状态（简化版）
   const [categoryMessages, setCategoryMessages] = useState<{ [categoryId: string]: { role: 'user' | 'ai', content: string }[] }>({});
 
   // 自动获取定位
@@ -334,23 +332,23 @@ export default function UserPage() {
   }, [currentUser, isOwnPage]);
 
   // 获取AI对话会话
-  useEffect(() => {
-    if (!currentUser || !isOwnPage) return;
+  // useEffect(() => {
+  //   if (!currentUser || !isOwnPage) return;
 
-    async function fetchChatSessions() {
-      try {
-        const response = await fetch('/api/chat-sessions');
-        if (response.ok) {
-          const data = await response.json();
-          setChatSessions(data.sessions || []);
-        }
-      } catch (error) {
-        console.error('Error fetching chat sessions:', error);
-      }
-    }
+  //   async function fetchChatSessions() {
+  //     try {
+  //       const response = await fetch('/api/chat-sessions');
+  //       if (response.ok) {
+  //         const data = await response.json();
+  //         setChatSessions(data.sessions || []);
+  //       }
+  //     } catch (error) {
+  //       console.error('Error fetching chat sessions:', error);
+  //     }
+  //   }
 
-    fetchChatSessions();
-  }, [currentUser, isOwnPage]);
+  //   fetchChatSessions();
+  // }, [currentUser, isOwnPage]);
 
   // 当分类改变且在AI模式时，自动加载该分类的对话历史
   useEffect(() => {
@@ -545,12 +543,16 @@ export default function UserPage() {
     setAdding(false);
   };
 
-  // AI 对话 - 支持文件夹引用
-  const handleAIChat = async (message: string, mentions: any[] = []) => {
+  // AI 对话 - 支持文件夹引用和位置信息
+  const handleAIChat = async (message: string, mentions: any[] = [], location?: { lat: number; lng: number } | null) => {
     if (!currentUser || !user) return;
 
     const categoryId = selectedCategoryId || 'default';
-    const currentMessages = categoryMessages[categoryId] || [];
+    let currentMessages = categoryMessages[categoryId] || [];
+    
+    // 不再需要从notes表获取AI对话历史，因为只保存用户问题
+    // AI对话的上下文传递通过messageHistory参数实现
+    
     const newUserMessage = { role: 'user' as const, content: message };
     const updatedMessages = [...currentMessages, newUserMessage];
 
@@ -571,7 +573,8 @@ export default function UserPage() {
           message,
           categoryId: selectedCategoryId,
           messageHistory: currentMessages.slice(-10), // 发送最近10条消息作为上下文
-          mentions: mentions // 添加文件夹引用
+          mentions: mentions, // 添加文件夹引用
+          location: location // 添加位置信息
         }),
       });
       const data = await res.json();
@@ -585,7 +588,44 @@ export default function UserPage() {
       }));
       setChatMessages(finalMessages);
 
-      // 保存消息到本地存储（可选）
+      // 只保存用户问题到 notes 表
+      try {
+        // 保存用户问题作为普通笔记
+        await supabase.from('notes').insert({
+          user_id: currentUser.id,
+          content: message,
+          category_id: selectedCategoryId,
+          is_private: isPrivateChat
+        });
+
+        console.log('[DEBUG] 用户问题已保存到notes表');
+        
+        // 刷新笔记列表以显示新的对话记录
+        if (user && currentUser) {
+          const { data: updatedNotes, error } = await supabase
+            .from('notes')
+            .select(`
+              *,
+              categories (
+                id,
+                name,
+                color,
+                icon,
+                is_private
+              )
+            `)
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false });
+          
+          if (!error && updatedNotes) {
+            setNotes(updatedNotes);
+          }
+        }
+      } catch (saveError) {
+        console.error('保存AI对话到notes表失败:', saveError);
+      }
+
+      // 保存消息到本地存储（备用）
       if (typeof window !== 'undefined') {
         localStorage.setItem(`chatMessages_${currentUser.id}_${categoryId}`, JSON.stringify(finalMessages));
       }
@@ -647,22 +687,63 @@ export default function UserPage() {
   // 处理会话更新
   const handleSessionUpdated = async () => {
     if (!currentUser) return;
-    try {
-      const response = await fetch('/api/chat-sessions');
-      if (response.ok) {
-        const data = await response.json();
-        setChatSessions(data.sessions || []);
-      }
-    } catch (error) {
-      console.error('Error fetching chat sessions:', error);
-    }
+    // try {
+    //   const response = await fetch('/api/chat-sessions');
+    //   if (response.ok) {
+    //     const data = await response.json();
+    //     setChatSessions(data.sessions || []);
+    //   }
+    // } catch (error) {
+    //   console.error('Error fetching chat sessions:', error);
+    // }
   };
 
   // 处理分类切换时加载对话历史
-  const handleCategoryChange = (categoryId: string | undefined) => {
+  const handleCategoryChange = async (categoryId: string | undefined) => {
     setSelectedCategoryId(categoryId);
+    // setSelectedChatSessionId(null); // 不再需要，已简化
     
-    // 加载该分类的对话历史
+    // 从数据库加载该分类下的最近会话
+    if (currentUser && categoryId) {
+      try {
+        const { data: sessions } = await supabase
+          .from('chat_sessions')
+          .select('id')
+          .eq('user_id', currentUser.id)
+          .eq('category_id', categoryId)
+          .order('updated_at', { ascending: false })
+          .limit(1);
+        
+        if (sessions && sessions.length > 0) {
+          const sessionId = sessions[0].id;
+          // setSelectedChatSessionId(sessionId); // 不再需要，已简化
+          
+          // 加载该会话的消息历史
+          const { data: dbMessages } = await supabase
+            .from('chat_messages')
+            .select('role, content')
+            .eq('session_id', sessionId)
+            .order('created_at', { ascending: true });
+          
+          if (dbMessages) {
+            const messages = dbMessages.map(msg => ({
+              role: msg.role === 'assistant' ? 'ai' as const : msg.role as 'user' | 'ai',
+              content: msg.content
+            }));
+            setCategoryMessages(prev => ({
+              ...prev,
+              [categoryId]: messages
+            }));
+            setChatMessages(messages);
+            return; // 如果从数据库加载成功，就不需要从localStorage加载了
+          }
+        }
+      } catch (error) {
+        console.error('从数据库加载会话历史失败:', error);
+      }
+    }
+    
+    // 如果数据库没有数据，降级到本地存储
     const currentMessages = categoryMessages[categoryId || 'default'] || [];
     setChatMessages(currentMessages);
     
@@ -1069,8 +1150,8 @@ export default function UserPage() {
               <EnhancedChatInput
                 value={input}
                 onChange={setInput}
-                onSend={(message, mentions) => {
-                  handleAIChat(message, mentions);
+                onSend={(message, mentions, location) => {
+                  handleAIChat(message, mentions, location);
                   setInput("");
                 }}
                 placeholder="向AI提问或对话，期待一下和朋友碰撞出什么火花..."
@@ -1198,13 +1279,13 @@ export default function UserPage() {
         currentUserId={currentUser?.id}
       />
 
-      {/* AI对话管理模态框 */}
-      <ChatSessionManagement
+      {/* AI对话管理模态框 - 已简化，不再需要 */}
+      {/* <ChatSessionManagement
         isOpen={showSessionManagement}
         onClose={() => setShowSessionManagement(false)}
         onSessionUpdated={handleSessionUpdated}
         currentUserId={currentUser?.id}
-      />
+      /> */}
 
       {/* Onboarding 引导流程 */}
       {showOnboarding && currentUser && (

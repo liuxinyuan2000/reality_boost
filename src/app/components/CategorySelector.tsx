@@ -109,7 +109,8 @@ export default function CategorySelector({
                 <>
                   <span className="text-lg">{selectedCategory.icon}</span>
                   <span 
-                    className="font-medium text-white"
+                    className="font-medium"
+                    style={{ color: 'var(--foreground)' }}
                   >
                     {selectedCategory.name}
                   </span>
@@ -180,7 +181,8 @@ export default function CategorySelector({
                   >
                     <span className="text-lg">{category.icon}</span>
                     <span 
-                      className="font-medium flex-1 text-white"
+                      className="font-medium flex-1"
+                      style={{ color: 'var(--foreground)' }}
                     >
                       {category.name}
                     </span>
@@ -214,7 +216,7 @@ export default function CategorySelector({
                     }}
                   >
                     <span className="text-lg">➕</span>
-                    <span style={{ color: 'var(--primary)' }}>创建新分类</span>
+                    <span style={{ color: 'var(--foreground)' }}>创建新分类</span>
                   </div>
                 </>
               )}
