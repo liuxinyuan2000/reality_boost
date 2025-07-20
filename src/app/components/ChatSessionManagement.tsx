@@ -181,12 +181,12 @@ export default function ChatSessionManagement({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="fixed inset-0 bg-white bg-opacity-80 backdrop-blur-xl z-50 flex items-center justify-center p-4">
       <div ref={modalRef} className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[80vh] overflow-hidden">
         {/* 头部 */}
-        <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
+        <div className="px-6 py-4 border-b" style={{ background: 'var(--background-secondary)', borderColor: 'var(--separator)' }}>
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-gray-900">AI对话管理</h2>
+                          <h2 className="text-xl font-semibold" style={{ color: 'var(--foreground)' }}>AI对话管理</h2>
             <button
               onClick={onClose}
               className="p-2 hover:bg-gray-200 rounded-full transition-colors"
@@ -257,7 +257,7 @@ export default function ChatSessionManagement({
 
                 {/* 分类选择 */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">选择文件夹</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">选择分类</label>
                   <select
                     value={newSession.category_id || ''}
                     onChange={(e) => setNewSession({ 
@@ -443,7 +443,7 @@ function SessionEditForm({
 
       {/* 分类选择 */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">选择文件夹</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">选择分类</label>
         <select
           value={editData.category_id || ''}
           onChange={(e) => setEditData({ 

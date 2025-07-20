@@ -89,7 +89,7 @@ export default function CategorySelector({
           className="text-sm font-medium mb-2 block"
           style={{ color: 'var(--foreground)' }}
         >
-          选择文件夹
+          选择分类
         </label>
         
         <div
@@ -121,8 +121,8 @@ export default function CategorySelector({
                 </>
               ) : (
                 <>
-                  <span className="text-white">
-                    默认
+                  <span style={{ color: 'var(--foreground-tertiary)' }}>
+                    选择分类
                   </span>
                 </>
               )}
@@ -148,28 +148,6 @@ export default function CategorySelector({
             }}
           >
             <div className="max-h-60 overflow-y-auto py-2">
-              {/* 无分类选项 */}
-              <div
-                className="flex items-center gap-3 px-4 py-2 cursor-pointer transition-colors hover:bg-opacity-50"
-                style={{
-                  backgroundColor: !selectedCategoryId ? 'var(--background-secondary)' : 'transparent'
-                }}
-                onMouseEnter={(e) => {
-                  if (!selectedCategoryId) return;
-                  e.currentTarget.style.backgroundColor = 'var(--background-secondary)';
-                }}
-                onMouseLeave={(e) => {
-                  if (!selectedCategoryId) return;
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                }}
-                onClick={() => {
-                  onCategoryChange(undefined);
-                  setShowDropdown(false);
-                }}
-              >
-                <span className="text-white">默认</span>
-              </div>
-
               {/* 分类列表 */}
               {loading ? (
                 <div className="px-4 py-3 text-center" style={{ color: 'var(--foreground-secondary)' }}>
@@ -177,7 +155,7 @@ export default function CategorySelector({
                 </div>
               ) : categories.length === 0 ? (
                 <div className="px-4 py-3 text-center" style={{ color: 'var(--foreground-secondary)' }}>
-                  默认
+                  暂无分类
                 </div>
               ) : (
                 categories.map((category) => (
@@ -236,7 +214,7 @@ export default function CategorySelector({
                     }}
                   >
                     <span className="text-lg">➕</span>
-                    <span style={{ color: 'var(--primary)' }}>创建新文件夹</span>
+                    <span style={{ color: 'var(--primary)' }}>创建新分类</span>
                   </div>
                 </>
               )}
@@ -252,7 +230,7 @@ export default function CategorySelector({
             className="text-sm font-medium"
             style={{ color: 'var(--foreground)' }}
           >
-            私有笔记
+            私有想法
           </span>
           <span className="text-xs" style={{ color: 'var(--foreground-tertiary)' }}>
             知识库不可被朋友调用

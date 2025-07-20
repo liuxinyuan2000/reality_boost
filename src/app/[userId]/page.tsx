@@ -12,6 +12,7 @@ import CategoryManagement from '../components/CategoryManagement';
 import ChatSessionManagement from '../components/ChatSessionManagement';
 import EnhancedChatInput from '../components/EnhancedChatInput';
 import ThemeButton from '../components/ThemeButton';
+import Onboarding from '../components/Onboarding';
 
 interface Note {
   id: string;
@@ -122,7 +123,7 @@ function ChatModal({ open, onClose, messages, onSend, sending, anchorRef, curren
                 setInput("");
               }
             }}
-            placeholder="输入你的问题，使用@引用好友文件夹..."
+            placeholder="输入你的问题，使用@引用好友公开的分类..."
             disabled={sending}
             currentUserId={currentUserId}
           />
@@ -236,6 +237,10 @@ export default function UserPage() {
   const [showCategoryManagement, setShowCategoryManagement] = useState(false);
   const [isPrivateNote, setIsPrivateNote] = useState(false);
   const [isPrivateChat, setIsPrivateChat] = useState(false);
+  
+  // Onboarding 相关状态
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [isNewUser, setIsNewUser] = useState(false);
 
   // AI对话会话相关状态
   const [chatSessions, setChatSessions] = useState<any[]>([]);
@@ -679,13 +684,51 @@ export default function UserPage() {
     }
   };
 
+  // 检查是否需要显示onboarding
+  const checkShouldShowOnboarding = async (userId: string) => {
+    try {
+      // 检查用户是否完成过onboarding
+      const onboardingKey = `onboarding_completed_${userId}`;
+      const completed = localStorage.getItem(onboardingKey);
+      
+      if (completed) {
+        return false;
+      }
+      
+      // 检查用户是否有内容（如果有内容说明不是新用户）
+      const [notesResponse, chatResponse] = await Promise.all([
+        fetch(`/api/notes?userId=${userId}&limit=1`),
+        fetch(`/api/chat-sessions?userId=${userId}&limit=1`)
+      ]);
+      
+      const notesData = await notesResponse.json();
+      const chatData = await chatResponse.json();
+      
+      const hasNotes = notesData.notes && notesData.notes.length > 0;
+      const hasChats = chatData.sessions && chatData.sessions.length > 0;
+      
+      // 如果没有任何内容，显示onboarding
+      return !hasNotes && !hasChats;
+    } catch (error) {
+      console.error('检查onboarding状态失败:', error);
+      return false;
+    }
+  };
+
   // 认证成功回调
-  const handleAuthSuccess = (userData: User) => {
+  const handleAuthSuccess = async (userData: User) => {
     localStorage.setItem('currentUser', JSON.stringify(userData));
     setCurrentUser(userData);
     setUser(userData);
     setIsOwnPage(true);
     setShowAuth(false);
+    
+    // 检查是否需要显示onboarding（注册新用户）
+    const shouldShow = await checkShouldShowOnboarding(userData.id);
+    if (shouldShow) {
+      setIsNewUser(true);
+      setShowOnboarding(true);
+    }
   };
 
   if (loading) {
@@ -1004,7 +1047,7 @@ export default function UserPage() {
                    }`}
                    style={{ width: '88px' }}
               >
-                写笔记
+                写想法
               </div>
                </div>
           </div>
@@ -1030,7 +1073,7 @@ export default function UserPage() {
                   handleAIChat(message, mentions);
                   setInput("");
                 }}
-                placeholder="向AI提问或对话..."
+                placeholder="向AI提问或对话，期待一下和朋友碰撞出什么火花..."
                 disabled={chatSending}
                 currentUserId={currentUser?.id || ''}
               />
@@ -1038,7 +1081,7 @@ export default function UserPage() {
           <div className="relative">
             <textarea
                   className="input-field w-full h-32 text-lg py-4 resize-none"
-                  placeholder="写下你的想法..."
+                  placeholder="写下你的想法，期待一下和朋友碰撞出什么火花..."
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => {
@@ -1070,7 +1113,7 @@ export default function UserPage() {
                   className="mt-2 text-xs text-center"
                   style={{ color: 'var(--foreground-tertiary)' }}
                 >
-                  💡 按 ⌘/Ctrl + Enter 快速记录
+                  按 ⌘/Ctrl + Enter 快速记录
           </div>
               </div>
             )}
@@ -1162,6 +1205,27 @@ export default function UserPage() {
         onSessionUpdated={handleSessionUpdated}
         currentUserId={currentUser?.id}
       />
+
+      {/* Onboarding 引导流程 */}
+      {showOnboarding && currentUser && (
+        <Onboarding
+          userId={currentUser.id}
+          username={currentUser.username}
+          onComplete={() => {
+            setShowOnboarding(false);
+            // 标记onboarding已完成
+            localStorage.setItem(`onboarding_completed_${currentUser.id}`, 'true');
+          }}
+          onSwitchToAI={() => {
+            setMode('ai');
+            setShowOnboarding(false);
+          }}
+          onSwitchToNote={() => {
+            setMode('note');
+            setShowOnboarding(false);
+          }}
+        />
+      )}
     </div>
   );
 } 

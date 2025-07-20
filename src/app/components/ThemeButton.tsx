@@ -100,14 +100,15 @@ export default function ThemeButton({ userId, onThemeChange }: ThemeButtonProps)
         onClick={() => setShowModal(true)}
         className="button-secondary text-sm py-2 px-4 flex items-center gap-2"
       >
-        <span>互动</span>
+        <span>设置</span>
       </button>
 
       {/* 模态框 */}
       {showModal && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+          className="fixed inset-0 bg-white bg-opacity-80 flex items-center justify-center p-4 z-50"
           onClick={() => setShowModal(false)}
+          style={{ backdropFilter: 'blur(20px)' }}
         >
           <div 
             className="w-full max-w-md bg-white rounded-2xl p-6"
@@ -122,7 +123,7 @@ export default function ThemeButton({ userId, onThemeChange }: ThemeButtonProps)
                 className="text-lg font-bold"
                 style={{ color: 'var(--foreground)' }}
               >
-                互动
+                互动设置
               </h3>
               <button
                 onClick={() => setShowModal(false)}

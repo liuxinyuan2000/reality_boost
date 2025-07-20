@@ -228,12 +228,6 @@ export default function FriendsPage() {
               >
                 我的主页
               </Link>
-              <Link 
-                href="/"
-                className="button-secondary text-sm py-2 px-4"
-              >
-                返回首页
-              </Link>
             </div>
           </div>
         </div>
@@ -276,13 +270,7 @@ export default function FriendsPage() {
               >
                 还没有好友
               </h3>
-              <p className="mb-6">快去添加一些好友，分享你们的状态吧！</p>
-              <Link 
-                href="/"
-                className="button-primary px-6 py-3 inline-block"
-              >
-                去发现用户
-              </Link>
+              <p className="mb-6">快去线下认识一些朋友，分享你们的状态吧！</p>
             </div>
           ) : (
             <div style={{ borderColor: 'var(--separator)' }} className="divide-y">

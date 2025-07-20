@@ -271,7 +271,7 @@ export default function EnhancedChatInput({
       
       {/* 提示文本 */}
       <div className="mt-2 text-xs text-center" style={{ color: 'var(--foreground-tertiary)' }}>
-        💡 输入 @ 可以引用好友的公开文件夹 • 按 ⌘/Ctrl + Enter 快速发送
+        输入 @ 可以引用好友公开的分类 • 按 ⌘/Ctrl + Enter 快速发送
         {showMentions && (
           <span className="ml-2 text-green-600">
             🟢 @提及已激活

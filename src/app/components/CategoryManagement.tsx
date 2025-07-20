@@ -198,12 +198,12 @@ export default function CategoryManagement({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-white bg-opacity-80 backdrop-blur-xl z-50 flex items-center justify-center p-4">
       <div ref={modalRef} className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden">
         {/* 头部 */}
-        <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
+        <div className="px-6 py-4 border-b" style={{ background: 'var(--background-secondary)', borderColor: 'var(--separator)' }}>
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-gray-900">文件夹管理</h2>
+            <h2 className="text-xl font-semibold" style={{ color: 'var(--foreground)' }}>分类管理</h2>
             <button
               onClick={onClose}
               className="p-2 hover:bg-gray-200 rounded-full transition-colors"
@@ -221,7 +221,7 @@ export default function CategoryManagement({
           <div className="mb-6 space-y-4">
             {/* 分类名称 */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">文件夹名称</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">分类名称</label>
               <input
                 type="text"
                 value={newCategory.name}
@@ -239,8 +239,8 @@ export default function CategoryManagement({
             {/* 是否私密 */}
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
               <div>
-                <label className="text-sm font-medium text-gray-700">私密文件夹</label>
-                <p className="text-xs text-gray-500 mt-1">私密文件夹只有你可以访问</p>
+                <label className="text-sm font-medium text-gray-700">私密分类</label>
+                <p className="text-xs text-gray-500 mt-1">私密分类只有你可以访问</p>
               </div>
               <button
                 onClick={() => setNewCategory({ ...newCategory, is_private: !newCategory.is_private })}
@@ -263,7 +263,7 @@ export default function CategoryManagement({
               disabled={!newCategory.name.trim() || isLoading}
               className="w-full bg-blue-600 text-white py-3 px-4 rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
             >
-              {isLoading ? '创建中...' : '创建文件夹'}
+              {isLoading ? '创建中...' : '创建分类'}
             </button>
           </div>
 

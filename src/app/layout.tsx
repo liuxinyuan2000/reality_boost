@@ -15,10 +15,7 @@ export const metadata: Metadata = {
   keywords: ["笔记", "AI", "社交", "NFC", "生活记录"],
   authors: [{ name: "Nebula Team" }],
   viewport: "width=device-width, initial-scale=1, maximum-scale=1",
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#007AFF" },
-    { media: "(prefers-color-scheme: dark)", color: "#0A84FF" }
-  ],
+  themeColor: "#007AFF",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",

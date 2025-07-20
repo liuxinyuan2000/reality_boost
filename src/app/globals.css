@@ -43,33 +43,7 @@
   --font-mono: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --primary: #0A84FF;
-    --primary-dark: #0A84FF;
-    --primary-light: #64A7FF;
-    
-    --secondary: #5E5CE6;
-    --success: #32D74B;
-    --warning: #FF9F0A;
-    --error: #FF453A;
-    
-    --background: #000000;
-    --background-secondary: #1C1C1E;
-    --background-tertiary: #2C2C2E;
-    --foreground: #FFFFFF;
-    --foreground-secondary: #EBEBF5;
-    --foreground-tertiary: #8E8E93;
-    
-    --separator: #38383A;
-    --separator-opaque: #1C1C1E;
-    
-    --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.3);
-    --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.3);
-    --shadow-3: 0 8px 24px rgba(0, 0, 0, 0.35);
-    --shadow-4: 0 16px 40px rgba(0, 0, 0, 0.35);
-  }
-}
+/* 强制使用浅色主题，移除深色模式 */
 
 /* 全局基础样式 */
 * {
@@ -102,12 +76,7 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
-@media (prefers-color-scheme: dark) {
-  .glass-effect {
-    background: rgba(0, 0, 0, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-  }
-}
+
 
 .button-primary {
   background: var(--primary);
