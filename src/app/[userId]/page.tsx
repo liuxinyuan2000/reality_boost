@@ -235,6 +235,7 @@ export default function UserPage() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | undefined>(undefined);
   const [showCategoryManagement, setShowCategoryManagement] = useState(false);
   const [isPrivateNote, setIsPrivateNote] = useState(false);
+  const [isPrivateChat, setIsPrivateChat] = useState(false);
 
   // AI对话会话相关状态
   const [chatSessions, setChatSessions] = useState<any[]>([]);
@@ -1020,9 +1021,9 @@ export default function UserPage() {
                <CategorySelector
                  userId={currentUser?.id || ''}
                  selectedCategoryId={selectedCategoryId}
-                 isPrivate={mode === 'note' ? isPrivateNote : false}
+                 isPrivate={mode === 'note' ? isPrivateNote : isPrivateChat}
                  onCategoryChange={mode === 'ai' ? handleCategoryChange : setSelectedCategoryId}
-                 onPrivateChange={mode === 'note' ? setIsPrivateNote : () => {}}
+                 onPrivateChange={mode === 'note' ? setIsPrivateNote : setIsPrivateChat}
                  onCreateCategory={() => setShowCategoryManagement(true)}
                />
              </div>
