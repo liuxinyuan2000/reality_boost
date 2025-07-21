@@ -374,7 +374,7 @@ export default function UserPage() {
         }
       }
     }
-  }, [selectedCategoryId, mode, currentUser, categoryMessages]);
+  }, [selectedCategoryId, mode, currentUser]);
 
   // 获取笔记
   useEffect(() => {

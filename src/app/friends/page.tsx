@@ -270,7 +270,7 @@ export default function FriendsPage() {
               >
                 还没有好友
               </h3>
-              <p className="mb-6">快去线下认识一些朋友，分享你们的状态吧！</p>
+              <p className="mb-6">快去线下认识一些朋友，分享你们的知识和状态吧！</p>
             </div>
           ) : (
             <div style={{ borderColor: 'var(--separator)' }} className="divide-y">
